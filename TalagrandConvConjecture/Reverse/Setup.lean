@@ -257,7 +257,73 @@ lemma continuousOn_F (x : Cube n) :
 lemma hasDerivAt_exp_neg_F {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
     HasDerivAt (fun t => Real.exp (-(D.F t x)))
       (-(D.revGen t (fun y => Real.exp (-(D.F t y))) x)) t := by
-  sorry
+  have hflip : ∀ i : Fin n, Real.exp (-(D.F t (flipCoord i x)))
+      = Real.exp (-(D.F t x)) / D.Y t i x := by
+    intro i
+    have h1 : D.F t (flipCoord i x) = D.F t x + Real.log (D.Y t i x) := by
+      have := D.F_flipCoord_sub_of_le ht i x; linarith
+    have h3 : Real.exp (-Real.log (D.Y t i x)) = (D.Y t i x)⁻¹ := by
+      rw [Real.exp_neg, Real.exp_log (D.Y_pos ht i x)]
+    rw [h1, neg_add, Real.exp_add, h3, div_eq_mul_inv]
+  have key : D.revGen t (fun y => Real.exp (-(D.F t y))) x
+      = Real.exp (-(D.F t x)) * ∑ i, D.Sc t i x := by
+    simp only [revGen, hflip, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    have hY := D.Y_ne_zero ht i x
+    simp only [Sc]
+    field_simp
+  rw [key, ← mul_neg]
+  exact ((D.hasDerivAt_F ht x).neg).exp
+
+/-- The reverse forward-equation flux sum, in closed form. -/
+lemma sum_revFwdMat_mul_revDensity {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
+    ∑ x', D.revFwdMat t x x' * D.revDensity t x'
+      = -(cubeLap (D.fs (D.T - t)) x) / 2 ^ n := by
+  have hb : D.fs (D.T - t) x ≠ 0 := D.fs_ne_zero (D.T_sub_nonneg ht) x
+  -- split the two contributions
+  have hsplit : ∑ x' : Cube n, D.revFwdMat t x x' * D.revDensity t x'
+      = (∑ x' : Cube n, ∑ i : Fin n,
+          (if x = flipCoord i x' then D.Y t i x' / 2 else 0) * D.revDensity t x')
+        - ∑ x' : Cube n,
+            (if x = x' then ∑ i, D.Y t i x / 2 else 0) * D.revDensity t x' := by
+    rw [← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl fun x' _ => ?_
+    simp only [revFwdMat, sub_mul, Finset.sum_mul]
+  -- the incoming flux from the `i`-th neighbour
+  have hA : ∀ i : Fin n, ∑ x' : Cube n,
+      (if x = flipCoord i x' then D.Y t i x' / 2 else 0) * D.revDensity t x'
+      = D.fs (D.T - t) x / 2 / 2 ^ n := by
+    intro i
+    have hcond : ∀ x' : Cube n, (x = flipCoord i x') ↔ (x' = flipCoord i x) := by
+      intro x'
+      constructor
+      · rintro rfl; rw [flipCoord_flipCoord]
+      · rintro rfl; rw [flipCoord_flipCoord]
+    have h2 : D.Y t i (flipCoord i x) * D.fs (D.T - t) (flipCoord i x)
+        = D.fs (D.T - t) x := by
+      simpa using D.Y_mul_fs ht i (flipCoord i x)
+    simp only [hcond, ite_mul, zero_mul, Finset.sum_ite_eq', Finset.mem_univ, if_true,
+      revDensity]
+    calc D.Y t i (flipCoord i x) / 2 * (D.fs (D.T - t) (flipCoord i x) / 2 ^ n)
+        = D.Y t i (flipCoord i x) * D.fs (D.T - t) (flipCoord i x) / 2 / 2 ^ n := by ring
+      _ = D.fs (D.T - t) x / 2 / 2 ^ n := by rw [h2]
+  rw [hsplit, Finset.sum_comm, Finset.sum_congr rfl (fun i (_ : i ∈ Finset.univ) => hA i)]
+  simp only [ite_mul, zero_mul, Finset.sum_ite_eq, Finset.mem_univ, if_true,
+    Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, revDensity]
+  -- closed forms for the two sums
+  have hYsum : (∑ i, D.Y t i x / 2) * (D.fs (D.T - t) x / 2 ^ n)
+      = (∑ i, D.fs (D.T - t) (flipCoord i x)) / 2 / 2 ^ n := by
+    have h1 : ∑ i, D.fs (D.T - t) (flipCoord i x)
+        = (∑ i, D.Y t i x) * D.fs (D.T - t) x := by
+      rw [Finset.sum_mul]
+      exact (Finset.sum_congr rfl fun i _ => D.Y_mul_fs ht i x).symm
+    rw [h1, ← Finset.sum_div]
+    ring
+  rw [hYsum]
+  simp only [cubeLap]
+  rw [Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+    nsmul_eq_mul]
+  ring
 
 /-- The explicit density `revDensity` solves the forward (master) equation of
 the reverse process: `∂_t ν_{T-t}(x) = ∑_{x'} revFwdMat t x x' ν_{T-t}(x')`
@@ -265,12 +331,16 @@ the reverse process: `∂_t ν_{T-t}(x) = ∑_{x'} revFwdMat t x x' ν_{T-t}(x')
 lemma hasDerivAt_revDensity {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
     HasDerivAt (fun t => D.revDensity t x)
       (∑ x', D.revFwdMat t x x' * D.revDensity t x') t := by
-  sorry
+  rw [D.sum_revFwdMat_mul_revDensity ht x]
+  simp only [revDensity]
+  exact (D.hasDerivAt_fs_sub t x).div_const (2 ^ n)
 
 /-- Continuity in `t` of the rate matrix entries on `(-∞, T]`. -/
 lemma continuousOn_Y (i : Fin n) (x : Cube n) :
     ContinuousOn (fun t => D.Y t i x) (Set.Iic D.T) := by
-  sorry
+  simp only [Y]
+  exact (D.continuous_fs_sub _).continuousOn.div (D.continuous_fs_sub x).continuousOn
+    fun t ht => D.fs_ne_zero (D.T_sub_nonneg (Set.mem_Iic.mp ht)) x
 
 /-! ## Terminal likelihood `H_t^ζ` [LGF §5.2] -/
 
