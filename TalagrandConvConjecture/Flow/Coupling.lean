@@ -367,7 +367,15 @@ def CFlowFamily (ℓ θ : ℝ) := ∀ x₀ : Cube n, D.CFlow ℓ θ x₀
 /-- **Existence of the coupling flow** [LGF §4; C Lemma 6 well-posedness]. -/
 theorem exists_cflow (ℓ : ℝ) (hℓ : 0 < ℓ) {θ : ℝ} (hθ0 : 0 ≤ θ)
     (hθ : θ ≤ obsT) (x₀ : Cube n) : Nonempty (D.CFlow ℓ θ x₀) := by
-  sorry
+  obtain ⟨K, z, hg⟩ := D.exists_admissibleGrid ℓ hℓ hθ
+  have hd0 := D.dbar_nonneg ℓ θ x₀
+  have hd1 : D.dbar ℓ θ x₀ ≤ 1 := by
+    have := D.dbar_lt_half ℓ θ x₀; linarith
+  obtain ⟨π, hπ⟩ := exists_gluedFlow K z (D.cellGen ℓ θ (D.dbar ℓ θ x₀) z)
+    (fun k => D.killTr ℓ (z k)) (initVec x₀) hg.mono
+    (fun k hk s s' => D.continuousOn_cellGen hd0 hd1 z k
+      (le_trans (D.grid_le_obsT hg (Nat.succ_le_of_lt hk)) (le_of_lt D.obsT_lt_T)) s s')
+  exact ⟨⟨K, z, π, ⟨hg, hπ⟩⟩⟩
 
 end Dat
 
@@ -389,13 +397,27 @@ variable {ℓ θ : ℝ} {x₀ : Cube n}
 theorem cflow_nonneg (hθ : θ ≤ obsT) (c : D.CFlow ℓ θ x₀)
     {k : ℕ} (hk : k < c.K) {t : ℝ} (ht : t ∈ Set.Icc (c.z k) (c.z (k + 1)))
     (s : JSt n) : 0 ≤ c.π k t s := by
-  sorry
+  have hd0 := D.dbar_nonneg ℓ θ x₀
+  have hd1 : D.dbar ℓ θ x₀ ≤ 1 := by
+    have := D.dbar_lt_half ℓ θ x₀; linarith
+  have hT : ∀ j : ℕ, j < c.K → c.z (j + 1) ≤ D.T := fun j hj =>
+    le_trans (D.grid_le_obsT c.is.grid (Nat.succ_le_of_lt hj)) (le_of_lt D.obsT_lt_T)
+  refine gluedFlow_nonneg c.is.glued
+    (fun j hj a a' => D.continuousOn_cellGen hd0 hd1 _ _ (hT j hj) a a')
+    (fun j hj t' ht' a a' hne => ?_)
+    (fun j a a' => D.killTr_nonneg _ _ a a') (fun a => initVec_nonneg x₀ a) k hk t ht s
+  exact fwdOf_offdiag_nonneg
+    (fun u u' => D.jrate_nonneg hd0 hd1 _ (le_trans ht'.2 (hT j hj)) u u') hne
 
 /-- Total mass conservation: `∑_s π_t(s) = 1` throughout. -/
 theorem cflow_mass (hθ : θ ≤ obsT) (c : D.CFlow ℓ θ x₀)
     {k : ℕ} (hk : k < c.K) {t : ℝ} (ht : t ∈ Set.Icc (c.z k) (c.z (k + 1))) :
     ∑ s, c.π k t s = 1 := by
-  sorry
+  have hcol : ∀ j, j < c.K → ∀ t' ∈ Set.Icc (c.z j) (c.z (j + 1)), ∀ s',
+      ∑ s, D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z j t' s s' = 0 :=
+    fun j _ t' _ s' => fwdOf_col_sum _ (fun a => D.jrate_diag _ _ a) s'
+  rw [gluedFlow_mass c.is.glued hcol (fun j s' => D.killTr_col_sum ℓ (c.z j) s') k hk t ht,
+    initVec_sum]
 
 /-- Alive-sector support: alive mass never sits on a state of the current
 cell's barrier (interior of the cell), and at the cell's endpoints alive mass
