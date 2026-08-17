@@ -780,7 +780,19 @@ lemma levelExcess_sub_eq (hf : ∀ x, 0 < f x) (hm : unifE f = 1) (u : ℝ)
 lemma flux_time_integral_le_one (hf : ∀ x, 0 < f x) (hm : unifE f = 1)
     (u : ℝ) (hu : 0 < u) {S : ℝ} (hS : 0 ≤ S) :
     ∫ s in (0 : ℝ)..S, levelFlux f s u ≤ 1 := by
-  sorry
+  have h := levelExcess_sub_eq hf hm u hu (le_refl (0 : ℝ)) hS
+  have hnn : 0 ≤ levelExcess f S u := unifE_nonneg fun x => le_max_right _ _
+  have hle : levelExcess f 0 u ≤ 1 := by
+    have hstep : levelExcess f 0 u ≤ unifE f := by
+      rw [levelExcess]
+      refine unifE_mono fun x => ?_
+      have h0 : heatAt f 0 x = f x := by rw [heatAt_zero]
+      rw [h0]
+      rcases le_or_gt (f x - Real.exp u) 0 with hc | hc
+      · rw [max_eq_right hc]; exact (hf x).le
+      · rw [max_eq_left hc.le]; linarith [Real.exp_pos u]
+    rwa [hm] at hstep
+  linarith
 
 /-- **Time-smoothed anti-concentration profile bound** [C Lemma 4]: there is a
 universal constant `C` such that for every `n`, strictly positive density `f`,
