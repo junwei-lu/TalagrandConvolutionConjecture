@@ -869,6 +869,37 @@ theorem cflow_mass (hθ : θ ≤ obsT) (c : D.CFlow ℓ θ x₀)
   rw [gluedFlow_mass c.is.glued hcol (fun j s' => D.killTr_col_sum ℓ (c.z j) s') k hk t ht,
     initVec_sum]
 
+/-- **In-cell alive-support invariant**: throughout each closed cell of the
+grid, alive mass never sits on the cell's (midpoint-sampled) barrier. This is
+the working form of "the stopping time `τ` has fired for such states"
+[LGF eq (3.1)]; consumed by the score-energy and supermartingale pairings. -/
+theorem cflow_alive_cell (hθ : θ ≤ obsT) (c : D.CFlow ℓ θ x₀)
+    {k : ℕ} (hk : k < c.K) {t : ℝ} (ht : t ∈ Set.Icc (c.z k) (c.z (k + 1)))
+    {x : Cube n} (hx : x ∈ D.barrier ℓ ((c.z k + c.z (k + 1)) / 2))
+    (y : Cube n) : c.π k t (x, y, true) = 0 := by
+  classical
+  have hd0 := D.dbar_nonneg ℓ θ x₀
+  have hd1 : D.dbar ℓ θ x₀ ≤ 1 := by
+    have := D.dbar_lt_half ℓ θ x₀; linarith
+  have hzmono : c.z k ≤ c.z (k + 1) := c.is.grid.mono k hk
+  have hzT : c.z (k + 1) ≤ D.T :=
+    le_trans (D.grid_le_obsT c.is.grid (Nat.succ_le_of_lt hk))
+      (le_of_lt D.obsT_lt_T)
+  have hinit : ∀ s : JSt n, s.2.2 = true →
+      s.1 ∈ D.barrier ℓ ((c.z k + c.z (k + 1)) / 2) → c.π k (c.z k) s = 0 := by
+    intro s hs1 hs2
+    have hsB : s.1 ∈ D.barrier ℓ (c.z k) :=
+      D.barrier_mid_subset c.is.grid hk hs2
+    rcases Nat.eq_zero_or_pos k with hk0 | hkpos
+    · subst hk0
+      rw [c.is.glued.init]
+      exact D.killTr_kills _ hs1 hsB
+    · obtain ⟨m, rfl⟩ : ∃ m, k = m + 1 := ⟨k - 1, by omega⟩
+      rw [c.is.glued.node m (by omega)]
+      exact D.killTr_kills _ hs1 hsB
+  exact D.cell_alive_zero hd0 hd1 hzmono hzT (c.is.glued.flow k hk) hinit t ht
+    (x, y, true) rfl hx
+
 /-- Alive-sector support: alive mass never sits on a state of the current
 cell's barrier (interior of the cell), and at the cell's endpoints alive mass
 sits only on states with `F ≤ ℓ+1`. Stated in the endpoint form used
