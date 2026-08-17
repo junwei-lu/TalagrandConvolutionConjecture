@@ -2587,7 +2587,6 @@ private lemma apE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
     (φ := fun k t => D.pertQPair φ c k t + 2 * D.apPair φ c k t) hK
     hmono hucont (fun k hk t ht => D.qPair_hasDeriv φ c hk ht)
     (fun k hk => (hpQint k hk).add ((hapint k hk).const_mul 2)) hnode_eq
-  simp only [] at hchain
   -- split the integral of the sum
   have hsplitint : ∀ k, k < c.K →
       (∫ t in c.z k..c.z (k + 1),
@@ -2601,8 +2600,13 @@ private lemma apE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
       = (∑ k ∈ Finset.range c.K, ∫ t in c.z k..c.z (k + 1),
           D.pertQPair φ c k t) + 2 * D.apE φ c := by
     rw [hchain]
-    rw [Finset.sum_congr rfl fun k hk => hsplitint k (Finset.mem_range.mp hk),
-      Finset.sum_add_distrib, ← Finset.mul_sum]
+    have hre : ∀ k ∈ Finset.range c.K,
+        (∫ t in c.z k..c.z (k + 1),
+          (fun k t => D.pertQPair φ c k t + 2 * D.apPair φ c k t) k t)
+        = (∫ t in c.z k..c.z (k + 1), D.pertQPair φ c k t)
+          + 2 * ∫ t in c.z k..c.z (k + 1), D.apPair φ c k t := fun k hk =>
+      hsplitint k (Finset.mem_range.mp hk)
+    rw [Finset.sum_congr rfl hre, Finset.sum_add_distrib, ← Finset.mul_sum]
     ring
   -- endpoint bounds
   have hend : D.qPair φ c (c.K - 1) (c.z c.K) ≤ 1 := by
@@ -3042,10 +3046,13 @@ theorem DA_le :
           ring
         rw [hSAeq] at hcs
         exact hcs
-      calc YA ≤ κ * D.probA θ A + Cst * ∑ x₀ ∈ A, D.startW θ x₀ *
-            (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
-              * Real.sqrt (D.gamE φ (Φ x₀))) := by
-          rw [← h2]; exact h1
+      calc YA
+          ≤ ∑ x₀ ∈ A, D.startW θ x₀ *
+              (κ + Cst * D.dbar ℓ θ x₀ * (Real.sqrt (D.scoreEnergy (Φ x₀))
+                * Real.sqrt (D.gamE φ (Φ x₀)))) := h1
+        _ = κ * D.probA θ A + Cst * ∑ x₀ ∈ A, D.startW θ x₀ *
+              (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+                * Real.sqrt (D.gamE φ (Φ x₀))) := h2
         _ ≤ κ * D.probA θ A + Cst * (Real.sqrt (D.SA Φ A) * Real.sqrt YA) := by
           have := mul_le_mul_of_nonneg_left h3 hCst0
           linarith
