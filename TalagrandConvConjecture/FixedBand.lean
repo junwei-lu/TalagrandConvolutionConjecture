@@ -25,14 +25,146 @@ For `ℓ < C·K_a²` the trivial bound `𝔄 ≤ 1 ≤ K_a√C/√ℓ` applies.
 
 namespace Talagrand
 
+/-! ### Elementary sum and analytic bounds used in the proof of [LGF Prop 3.2] -/
+
+/-- `∑_{j<m} (j+1)^{-1/2} ≤ 2√m`. -/
+private lemma sum_inv_sqrt_le (m : ℕ) :
+    ∑ j ∈ Finset.range m, (Real.sqrt ((j : ℝ) + 1))⁻¹ ≤ 2 * Real.sqrt m := by
+  induction m with
+  | zero => simp
+  | succ k ih =>
+    rw [Finset.sum_range_succ]
+    have hk1 : (0 : ℝ) < Real.sqrt ((k : ℝ) + 1) :=
+      Real.sqrt_pos.mpr (by positivity)
+    have hsq : Real.sqrt ((k : ℝ) + 1) * Real.sqrt ((k : ℝ) + 1) = (k : ℝ) + 1 :=
+      Real.mul_self_sqrt (by positivity)
+    have hmul : Real.sqrt (k : ℝ) * Real.sqrt ((k : ℝ) + 1) ≤ (k : ℝ) + 1 / 2 := by
+      rw [← Real.sqrt_mul (by positivity)]
+      calc Real.sqrt ((k : ℝ) * ((k : ℝ) + 1))
+          ≤ Real.sqrt (((k : ℝ) + 1 / 2) ^ 2) := Real.sqrt_le_sqrt (by nlinarith)
+        _ = (k : ℝ) + 1 / 2 := Real.sqrt_sq (by positivity)
+    have h2 : 1 ≤ (2 * Real.sqrt ((k : ℝ) + 1) - 2 * Real.sqrt (k : ℝ))
+        * Real.sqrt ((k : ℝ) + 1) := by nlinarith
+    have key : (Real.sqrt ((k : ℝ) + 1))⁻¹
+        ≤ 2 * Real.sqrt ((k : ℝ) + 1) - 2 * Real.sqrt (k : ℝ) := by
+      calc (Real.sqrt ((k : ℝ) + 1))⁻¹
+          = 1 * (Real.sqrt ((k : ℝ) + 1))⁻¹ := (one_mul _).symm
+        _ ≤ ((2 * Real.sqrt ((k : ℝ) + 1) - 2 * Real.sqrt (k : ℝ))
+              * Real.sqrt ((k : ℝ) + 1)) * (Real.sqrt ((k : ℝ) + 1))⁻¹ :=
+            mul_le_mul_of_nonneg_right h2 (by positivity)
+        _ = 2 * Real.sqrt ((k : ℝ) + 1) - 2 * Real.sqrt (k : ℝ) := by
+            field_simp
+    have hcast : ((k + 1 : ℕ) : ℝ) = (k : ℝ) + 1 := by push_cast; ring
+    rw [hcast]
+    linarith
+
+/-- Harmonic-sum bound, real form. -/
+private lemma sum_inv_le_one_add_log (m : ℕ) :
+    ∑ j ∈ Finset.range m, ((j : ℝ) + 1)⁻¹ ≤ 1 + Real.log m := by
+  have h := harmonic_le_one_add_log m
+  rw [harmonic] at h
+  push_cast at h
+  exact h
+
+private lemma log_le_two_mul_sqrt {x : ℝ} (hx : 0 < x) :
+    Real.log x ≤ 2 * Real.sqrt x := by
+  have hs : 0 < Real.sqrt x := Real.sqrt_pos.mpr hx
+  have h1 : Real.log (Real.sqrt x) ≤ Real.sqrt x - 1 :=
+    Real.log_le_sub_one_of_pos hs
+  have h2 : Real.log (Real.sqrt x) = Real.log x / 2 := Real.log_sqrt hx.le
+  linarith
+
+private lemma log_le_four_mul_sqrt_sqrt {x : ℝ} (hx : 0 < x) :
+    Real.log x ≤ 4 * Real.sqrt (Real.sqrt x) := by
+  have h1 := log_le_two_mul_sqrt (Real.sqrt_pos.mpr hx)
+  have h2 : Real.log (Real.sqrt x) = Real.log x / 2 := Real.log_sqrt hx.le
+  linarith
+
+/-- `κ_a·Λ_a ≤ K_a` (from `K² = κ³Λ` and `Λ ≤ κ`). -/
+private lemma kappa_mul_Lam_le {κ Λ K : ℝ} (hκ : 1 < κ) (hΛ1 : 1 ≤ Λ)
+    (hΛκ : Λ ≤ κ) (hK : K ^ 2 = κ ^ 3 * Λ) (hK0 : 0 ≤ K) : κ * Λ ≤ K := by
+  have hκ0 : (0 : ℝ) < κ := by linarith
+  have hΛ0 : (0 : ℝ) < Λ := by linarith
+  have h1 : (κ * Λ) ^ 2 ≤ K ^ 2 := by
+    rw [hK]
+    nlinarith [mul_nonneg (mul_nonneg (mul_pos hκ0 hκ0).le hΛ0.le)
+      (sub_nonneg.mpr hΛκ)]
+  have h2 := Real.sqrt_le_sqrt h1
+  rwa [Real.sqrt_sq (by positivity), Real.sqrt_sq hK0] at h2
+
+/-- The absorption inequality of [LGF eq (3.12)]:
+`κ²Λ·(1 + log ℓ) ≤ 5·K·√ℓ` whenever `ℓ ≥ K²` and `ℓ ≥ 1`. -/
+private lemma kappa_sq_Lam_log_le {κ Λ K ℓ : ℝ} (hκ : 1 < κ) (hΛ1 : 1 ≤ Λ)
+    (hΛκ : Λ ≤ κ) (hK : K ^ 2 = κ ^ 3 * Λ) (hK1 : 1 ≤ K) (hℓ : K ^ 2 ≤ ℓ)
+    (hℓ1 : 1 ≤ ℓ) : κ ^ 2 * Λ * (1 + Real.log ℓ) ≤ 5 * K * Real.sqrt ℓ := by
+  have hℓ0 : (0 : ℝ) < ℓ := by linarith
+  have hK0 : (0 : ℝ) ≤ K := by linarith
+  have hκ0 : (0 : ℝ) < κ := by linarith
+  have hΛ0 : (0 : ℝ) < Λ := by linarith
+  have hkl : κ * Λ ≤ K := kappa_mul_Lam_le hκ hΛ1 hΛκ hK hK0
+  -- `(κ²Λ)² ≤ K³`
+  have hcube : (κ ^ 2 * Λ) ^ 2 ≤ K ^ 3 := by
+    have h1 : (κ ^ 2 * Λ) ^ 2 = (κ * Λ) * (κ ^ 3 * Λ) := by ring
+    have h2 : K ^ 3 = K * (κ ^ 3 * Λ) := by rw [← hK]; ring
+    rw [h1, h2]
+    exact mul_le_mul_of_nonneg_right hkl (by positivity)
+  have hsqrtK : Real.sqrt (K ^ 3) = K * Real.sqrt K := by
+    rw [show K ^ 3 = K ^ 2 * K by ring, Real.sqrt_mul (by positivity),
+      Real.sqrt_sq hK0]
+  have hmain : κ ^ 2 * Λ ≤ K * Real.sqrt K := by
+    rw [← hsqrtK]
+    calc κ ^ 2 * Λ = Real.sqrt ((κ ^ 2 * Λ) ^ 2) :=
+          (Real.sqrt_sq (by positivity)).symm
+      _ ≤ Real.sqrt (K ^ 3) := Real.sqrt_le_sqrt hcube
+  -- `1 + log ℓ ≤ 5·ℓ^{1/4}`
+  have hq1 : (1 : ℝ) ≤ Real.sqrt (Real.sqrt ℓ) := by
+    have : (1 : ℝ) ≤ Real.sqrt ℓ := by
+      rw [show (1:ℝ) = Real.sqrt 1 by simp]
+      exact Real.sqrt_le_sqrt hℓ1
+    rw [show (1:ℝ) = Real.sqrt 1 by simp]
+    exact Real.sqrt_le_sqrt (by simpa using this)
+  have hlog : 1 + Real.log ℓ ≤ 5 * Real.sqrt (Real.sqrt ℓ) := by
+    have := log_le_four_mul_sqrt_sqrt hℓ0
+    linarith
+  -- `√K ≤ ℓ^{1/4}`
+  have hKle : K ≤ Real.sqrt ℓ := by
+    rw [show K = Real.sqrt (K ^ 2) from (Real.sqrt_sq hK0).symm]
+    exact Real.sqrt_le_sqrt hℓ
+  have hsK : Real.sqrt K ≤ Real.sqrt (Real.sqrt ℓ) := Real.sqrt_le_sqrt hKle
+  have hqq : Real.sqrt (Real.sqrt ℓ) * Real.sqrt (Real.sqrt ℓ) = Real.sqrt ℓ :=
+    Real.mul_self_sqrt (Real.sqrt_nonneg _)
+  have hsK0 : (0 : ℝ) ≤ Real.sqrt K := Real.sqrt_nonneg _
+  have hlog0 : (0 : ℝ) ≤ Real.log ℓ := Real.log_nonneg hℓ1
+  calc κ ^ 2 * Λ * (1 + Real.log ℓ)
+      ≤ (K * Real.sqrt K) * (5 * Real.sqrt (Real.sqrt ℓ)) := by
+        exact mul_le_mul hmain hlog (by linarith) (by positivity)
+    _ ≤ (K * Real.sqrt (Real.sqrt ℓ)) * (5 * Real.sqrt (Real.sqrt ℓ)) := by
+        apply mul_le_mul_of_nonneg_right _ (by positivity)
+        exact mul_le_mul_of_nonneg_left hsK hK0
+    _ = 5 * K * (Real.sqrt (Real.sqrt ℓ) * Real.sqrt (Real.sqrt ℓ)) := by ring
+    _ = 5 * K * Real.sqrt ℓ := by rw [hqq]
+
 namespace Dat
 
 variable {n : ℕ} (D : Dat n)
 
 /-- Coupling-flow families exist for every admissible `(ℓ, θ)`. -/
 theorem exists_cflowFamily (ℓ : ℝ) (hℓ : 0 < ℓ) {θ : ℝ} (hθ0 : 0 ≤ θ)
-    (hθ : θ ≤ obsT) : Nonempty (D.CFlowFamily ℓ θ) := by
-  sorry
+    (hθ : θ ≤ obsT) : Nonempty (D.CFlowFamily ℓ θ) :=
+  ⟨fun x₀ => (D.exists_cflow ℓ hℓ hθ0 hθ x₀).some⟩
+
+/-- Terminal sub-law of a coupling flow is nonnegative (the terminal time
+`T_o` sits in the last cell of the grid). -/
+lemma cflow_term_nonneg {ℓ θ : ℝ} (hθ : θ ≤ obsT) {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) (s : JSt n) : 0 ≤ c.term s := by
+  have hK : 0 < c.K := c.is.grid.pos
+  have hk : c.K - 1 < c.K := Nat.sub_lt hK Nat.one_pos
+  have hsucc : c.K - 1 + 1 = c.K := Nat.succ_pred_eq_of_pos hK
+  have hmono : c.z (c.K - 1) ≤ c.z (c.K - 1 + 1) := c.is.grid.mono _ hk
+  have hlast : c.z (c.K - 1 + 1) = obsT := by rw [hsucc]; exact c.is.grid.last
+  have ht : obsT ∈ Set.Icc (c.z (c.K - 1)) (c.z (c.K - 1 + 1)) :=
+    ⟨by rw [← hlast]; exact hmono, hlast.ge⟩
+  exact D.cflow_nonneg hθ c hk ht s
 
 /-- **Reciprocal-martingale tail bound** [LGF, Step 2 of Prop 3.2]: for any
 coupling flow from `x₀`,
@@ -41,7 +173,133 @@ theorem term_V_tail_le {ℓ θ : ℝ} (hθ0 : 0 ≤ θ) (hθ : θ ≤ obsT) {x�
     (c : D.CFlow ℓ θ x₀) (cLev : ℝ) :
     ∑ s : JSt n, c.term s * (if D.F obsT s.1 ≤ cLev then (1 : ℝ) else 0)
       ≤ Real.exp (cLev - D.F θ x₀) := by
-  sorry
+  classical
+  have hsub : Set.Icc θ obsT ⊆ Set.Iic D.T := fun t ht =>
+    le_trans ht.2 (le_of_lt D.obsT_lt_T)
+  have hmarg : ∑ s : JSt n, c.term s * Real.exp (-(D.F obsT s.1))
+      = Real.exp (-(D.F θ x₀)) := by
+    refine D.cflow_V_marginal hθ0 hθ c (fun t x => Real.exp (-(D.F t x)))
+      (fun x => (((D.continuousOn_F x).mono hsub).neg).rexp) ?_
+    intro x t ht
+    exact (D.hasDerivAt_exp_neg_F (hsub ht) x).hasDerivWithinAt
+  have hterm : ∀ s : JSt n, 0 ≤ c.term s := fun s => D.cflow_term_nonneg hθ c s
+  have hle : ∀ s : JSt n, c.term s * (if D.F obsT s.1 ≤ cLev then (1 : ℝ) else 0)
+      ≤ Real.exp cLev * (c.term s * Real.exp (-(D.F obsT s.1))) := by
+    intro s
+    by_cases h : D.F obsT s.1 ≤ cLev
+    · rw [if_pos h, mul_one]
+      have h1 : (1 : ℝ) ≤ Real.exp cLev * Real.exp (-(D.F obsT s.1)) := by
+        rw [← Real.exp_add]
+        exact Real.one_le_exp (by linarith)
+      calc c.term s = c.term s * 1 := (mul_one _).symm
+        _ ≤ c.term s * (Real.exp cLev * Real.exp (-(D.F obsT s.1))) :=
+            mul_le_mul_of_nonneg_left h1 (hterm s)
+        _ = Real.exp cLev * (c.term s * Real.exp (-(D.F obsT s.1))) := by ring
+    · rw [if_neg h, mul_zero]
+      exact mul_nonneg (Real.exp_pos _).le
+        (mul_nonneg (hterm s) (Real.exp_pos _).le)
+  calc ∑ s : JSt n, c.term s * (if D.F obsT s.1 ≤ cLev then (1 : ℝ) else 0)
+      ≤ ∑ s : JSt n, Real.exp cLev * (c.term s * Real.exp (-(D.F obsT s.1))) :=
+        Finset.sum_le_sum fun s _ => hle s
+    _ = Real.exp cLev * ∑ s : JSt n, c.term s * Real.exp (-(D.F obsT s.1)) := by
+        rw [← Finset.mul_sum]
+    _ = Real.exp cLev * Real.exp (-(D.F θ x₀)) := by rw [hmarg]
+    _ = Real.exp (cLev - D.F θ x₀) := by
+        rw [← Real.exp_add, ← sub_eq_add_neg]
+
+/-! ### The backward (terminal-value) extension of a test function
+
+`revFwdMat` is the transpose of the matrix of `revGen`; the terminal-value
+problem `∂_t g = -revGen g`, `g_{T_o} = φ` is therefore solved by reversing
+time in `exists_linFlow`, and the pairing `⟨ν_{T-t}, g_t⟩` is constant. -/
+
+/-- Summing `revFwdMat` against its *first* index reproduces the reverse
+generator: `∑_x revFwdMat_t(x,y)·g(x) = (L̃_t g)(y)`. -/
+lemma sum_revFwdMat_mul (t : ℝ) (g : Cube n → ℝ) (y : Cube n) :
+    ∑ x : Cube n, D.revFwdMat t x y * g x = D.revGen t g y := by
+  classical
+  have e1 : ∀ x : Cube n, D.revFwdMat t x y * g x
+      = (∑ i, if x = flipCoord i y then D.Y t i y / 2 * g x else 0)
+        - (if x = y then (∑ i, D.Y t i x / 2) * g x else 0) := by
+    intro x
+    rw [revFwdMat, sub_mul, Finset.sum_mul]
+    congr 1
+    · exact Finset.sum_congr rfl fun i _ => by
+        by_cases h : x = flipCoord i y <;> simp [h]
+    · by_cases h : x = y <;> simp [h]
+  rw [Finset.sum_congr rfl fun x _ => e1 x, Finset.sum_sub_distrib,
+    Finset.sum_comm]
+  have e2 : ∀ i : Fin n,
+      (∑ x : Cube n, if x = flipCoord i y then D.Y t i y / 2 * g x else 0)
+        = D.Y t i y / 2 * g (flipCoord i y) := fun i => by simp
+  have e3 : (∑ x : Cube n, if x = y then (∑ i, D.Y t i x / 2) * g x else 0)
+      = (∑ i, D.Y t i y / 2) * g y := by simp
+  rw [Finset.sum_congr rfl fun i _ => e2 i, e3, revGen, Finset.sum_mul,
+    ← Finset.sum_sub_distrib]
+  exact Finset.sum_congr rfl fun i _ => by ring
+
+/-- Continuity in `t` of the forward matrix entries on `(-∞, T]`. -/
+lemma continuousOn_revFwdMat (x x' : Cube n) :
+    ContinuousOn (fun t => D.revFwdMat t x x') (Set.Iic D.T) := by
+  classical
+  simp only [revFwdMat]
+  refine ContinuousOn.sub (continuousOn_finset_sum _ fun i _ => ?_) ?_
+  · by_cases h : x = flipCoord i x'
+    · simp only [if_pos h]
+      exact (D.continuousOn_Y i x').div_const 2
+    · simp only [if_neg h]; exact continuousOn_const
+  · by_cases h : x = x'
+    · simp only [if_pos h]
+      exact continuousOn_finset_sum _ fun i _ => (D.continuousOn_Y i x).div_const 2
+    · simp only [if_neg h]; exact continuousOn_const
+
+/-- Backward (terminal-value) extension: for every `φ` there is `g` on
+`[θ, T_o]` with `∂_t g_t = -L̃_t g_t` and `g_{T_o} = φ`. -/
+lemma exists_backFlow {θ : ℝ} (hθ : θ ≤ obsT) (φ : Cube n → ℝ) :
+    ∃ g : ℝ → Cube n → ℝ,
+      (∀ x, ContinuousOn (fun t => g t x) (Set.Icc θ obsT)) ∧
+      (∀ x, ∀ t ∈ Set.Icc θ obsT,
+        HasDerivWithinAt (fun t => g t x) (-(D.revGen t (g t) x))
+          (Set.Icc θ obsT) t) ∧
+      g obsT = φ := by
+  classical
+  have hmaps : Set.MapsTo (fun t => θ + obsT - t) (Set.Icc θ obsT)
+      (Set.Icc θ obsT) := fun t ht => ⟨by linarith [ht.2], by linarith [ht.1]⟩
+  have hmapsT : Set.MapsTo (fun t => θ + obsT - t) (Set.Icc θ obsT)
+      (Set.Iic D.T) := fun t ht => by
+    have := (hmaps ht).2
+    have h2 : obsT ≤ D.T := D.obsT_lt_T.le
+    exact le_trans this h2
+  have hcontσ : ContinuousOn (fun t : ℝ => θ + obsT - t) (Set.Icc θ obsT) := by
+    fun_prop
+  set A : ℝ → Cube n → Cube n → ℝ :=
+    fun t x x' => D.revFwdMat (θ + obsT - t) x' x with hA
+  have hAc : ∀ x x', ContinuousOn (fun t => A t x x') (Set.Icc θ obsT) :=
+    fun x x' => (D.continuousOn_revFwdMat x' x).comp hcontσ hmapsT
+  obtain ⟨w, hw, hw0⟩ := exists_linFlow A hθ hAc φ
+  refine ⟨fun t => w (θ + obsT - t), fun x => (hw.cont x).comp hcontσ hmaps,
+    ?_, ?_⟩
+  · intro x t ht
+    have hσ : HasDerivWithinAt (fun t : ℝ => θ + obsT - t) (-1)
+        (Set.Icc θ obsT) t := by
+      simpa using
+        (((hasDerivAt_const t (θ + obsT)).sub (hasDerivAt_id t)).hasDerivWithinAt
+          (s := Set.Icc θ obsT))
+    have hd := hw.deriv x (θ + obsT - t) (hmaps ht)
+    have key : HasDerivWithinAt (fun t => w (θ + obsT - t) x)
+        (matVec (A (θ + obsT - t)) (w (θ + obsT - t)) x * (-1))
+        (Set.Icc θ obsT) t := hd.comp t hσ hmaps
+    have harg : θ + obsT - (θ + obsT - t) = t := by ring
+    have hval : matVec (A (θ + obsT - t)) (w (θ + obsT - t)) x
+        = D.revGen t (w (θ + obsT - t)) x := by
+      simp only [hA, matVec, harg]
+      exact D.sum_revFwdMat_mul t (w (θ + obsT - t)) x
+    rw [hval, mul_neg_one] at key
+    exact key
+  · funext x
+    show w (θ + obsT - obsT) x = φ x
+    rw [show θ + obsT - obsT = θ from by ring]
+    exact congrFun hw0 x
 
 open Classical in
 /-- The `V`-terminal band mass over all starting points is the profile:
@@ -52,13 +310,107 @@ theorem sum_term_V_eq_profile {ℓ θ : ℝ} (hθ0 : 0 ≤ θ) (hθ : θ ≤ obs
     ∑ x₀ : Cube n, D.startW θ x₀ * ∑ s : JSt n, (Φ x₀).term s *
         (if D.F obsT s.1 ∈ I then (1 : ℝ) else 0)
       = profile D.f D.tA I := by
-  sorry
+  classical
+  obtain ⟨g, hgc, hgd, hgT⟩ :=
+    D.exists_backFlow hθ (fun x => if D.F obsT x ∈ I then (1 : ℝ) else 0)
+  have hgTx : ∀ x : Cube n,
+      g obsT x = if D.F obsT x ∈ I then (1 : ℝ) else 0 := fun x => congrFun hgT x
+  -- the reverse law is a flow for `revFwdMat`
+  have hTle : ∀ t ∈ Set.Icc θ obsT, t ≤ D.T := fun t ht =>
+    le_trans ht.2 D.obsT_lt_T.le
+  have hν : IsLinFlow D.revFwdMat θ obsT (fun t => D.revDensity t) := by
+    refine ⟨fun x t ht => ?_, fun x t ht => ?_⟩
+    · exact ((D.hasDerivAt_revDensity (hTle t ht) x).continuousAt).continuousWithinAt
+    · exact (D.hasDerivAt_revDensity (hTle t ht) x).hasDerivWithinAt
+  -- the pairing has vanishing derivative
+  have hpair : ∀ t ∈ Set.Icc θ obsT,
+      HasDerivWithinAt (fun t => ∑ x : Cube n, D.revDensity t x * g t x) 0
+        (Set.Icc θ obsT) t := by
+    intro t ht
+    have h := hasDerivWithinAt_pairing hν ht (g := g)
+      (g' := fun x => -(D.revGen t (g t) x)) (fun x => hgd x t ht)
+    have e1 : ∑ x : Cube n, matVec (D.revFwdMat t) (D.revDensity t) x * g t x
+        = ∑ x : Cube n, D.revDensity t x * D.revGen t (g t) x := by
+      simp only [matVec, Finset.sum_mul]
+      rw [Finset.sum_comm]
+      refine Finset.sum_congr rfl fun x' _ => ?_
+      rw [← D.sum_revFwdMat_mul t (g t) x', Finset.mul_sum]
+      exact Finset.sum_congr rfl fun x _ => by ring
+    have e2 : ∑ x : Cube n, D.revDensity t x * (-(D.revGen t (g t) x))
+        = -∑ x : Cube n, D.revDensity t x * D.revGen t (g t) x := by
+      rw [← Finset.sum_neg_distrib]
+      exact Finset.sum_congr rfl fun x _ => by ring
+    have hzero : ∑ x : Cube n, (matVec (D.revFwdMat t) (D.revDensity t) x * g t x
+        + D.revDensity t x * (-(D.revGen t (g t) x))) = 0 := by
+      rw [Finset.sum_add_distrib, e1, e2, add_neg_cancel]
+    rwa [hzero] at h
+  -- hence it is constant
+  have hconst : ∑ x : Cube n, D.revDensity obsT x * g obsT x
+      = ∑ x : Cube n, D.revDensity θ x * g θ x := by
+    rcases eq_or_lt_of_le hθ with heq | hlt
+    · rw [heq]
+    · refine constant_of_derivWithin_zero
+        (fun t ht => (hpair t ht).differentiableWithinAt)
+        (fun t ht => (hpair t ⟨ht.1, ht.2.le⟩).derivWithin
+          (uniqueDiffOn_Icc hlt t ⟨ht.1, ht.2.le⟩))
+        obsT (Set.right_mem_Icc.2 hθ)
+  -- the left-hand side is the pairing at time `θ`
+  have hmarg : ∀ x₀ : Cube n,
+      ∑ s : JSt n, (Φ x₀).term s * (if D.F obsT s.1 ∈ I then (1 : ℝ) else 0)
+        = g θ x₀ := by
+    intro x₀
+    have h := D.cflow_V_marginal hθ0 hθ (Φ x₀) g hgc hgd
+    simpa only [hgTx] using h
+  have hL : ∑ x₀ : Cube n, D.startW θ x₀ * ∑ s : JSt n, (Φ x₀).term s *
+        (if D.F obsT s.1 ∈ I then (1 : ℝ) else 0)
+      = ∑ x₀ : Cube n, D.revDensity θ x₀ * g θ x₀ :=
+    Finset.sum_congr rfl fun x₀ _ => by rw [hmarg x₀]; rfl
+  -- and the pairing at time `T_o` is the profile
+  have hTsub : D.T - obsT = D.tA := by
+    show D.tA + obsT - obsT = D.tA
+    ring
+  have hterm : ∀ x : Cube n, D.revDensity obsT x * g obsT x
+      = I.indicator (fun _ => heatAt D.f D.tA x)
+          (Real.log (heatAt D.f D.tA x)) / 2 ^ n := by
+    intro x
+    have hF : D.F obsT x = Real.log (heatAt D.f D.tA x) := by
+      show Real.log (D.fs (D.T - obsT) x) = _
+      rw [hTsub]; rfl
+    have hd : D.revDensity obsT x = heatAt D.f D.tA x / 2 ^ n := by
+      show D.fs (D.T - obsT) x / 2 ^ n = _
+      rw [hTsub]; rfl
+    rw [hgTx, hF, hd]
+    by_cases h : Real.log (heatAt D.f D.tA x) ∈ I
+    · rw [if_pos h, Set.indicator_of_mem h]; ring
+    · rw [if_neg h, Set.indicator_of_notMem h]; ring
+  have hR : ∑ x : Cube n, D.revDensity obsT x * g obsT x = profile D.f D.tA I := by
+    rw [profile, unifE, Finset.sum_div]
+    exact Finset.sum_congr rfl fun x _ => hterm x
+  rw [hL, ← hconst, hR]
 
 /-- Vanishing of high bands: `𝔄_{t_a}((r,r+1]) = 0` once `r` exceeds
 `max_x log f_{t_a}(x)`. -/
 theorem exists_profile_vanish :
     ∃ B : ℝ, ∀ r : ℝ, B ≤ r → profile D.f D.tA (Set.Ioc r (r + 1)) = 0 := by
-  sorry
+  classical
+  refine ⟨1 + ∑ x : Cube n, |Real.log (heatAt D.f D.tA x)|, fun r hr => ?_⟩
+  have hnot : ∀ x : Cube n,
+      Real.log (heatAt D.f D.tA x) ∉ Set.Ioc r (r + 1) := by
+    intro x hx
+    have h1 : |Real.log (heatAt D.f D.tA x)|
+        ≤ ∑ y : Cube n, |Real.log (heatAt D.f D.tA y)| :=
+      Finset.single_le_sum (f := fun y : Cube n => |Real.log (heatAt D.f D.tA y)|)
+        (fun y _ => abs_nonneg _) (Finset.mem_univ x)
+    have h2 := le_abs_self (Real.log (heatAt D.f D.tA x))
+    have h3 := hx.1
+    linarith
+  have hz : (fun x : Cube n => (Set.Ioc r (r + 1)).indicator
+      (fun _ => heatAt D.f D.tA x) (Real.log (heatAt D.f D.tA x)))
+      = fun _ : Cube n => (0 : ℝ) := by
+    funext x
+    exact Set.indicator_of_notMem (hnot x) _
+  simp only [profile, hz]
+  exact unifE_const 0
 
 end Dat
 
