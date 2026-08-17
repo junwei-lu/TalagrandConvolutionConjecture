@@ -2587,6 +2587,7 @@ private lemma apE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
     (φ := fun k t => D.pertQPair φ c k t + 2 * D.apPair φ c k t) hK
     hmono hucont (fun k hk t ht => D.qPair_hasDeriv φ c hk ht)
     (fun k hk => (hpQint k hk).add ((hapint k hk).const_mul 2)) hnode_eq
+  simp only [] at hchain
   -- split the integral of the sum
   have hsplitint : ∀ k, k < c.K →
       (∫ t in c.z k..c.z (k + 1),
@@ -3015,7 +3016,8 @@ theorem DA_le :
           = κ * D.probA θ A + Cst * ∑ x₀ ∈ A, D.startW θ x₀ *
               (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
                 * Real.sqrt (D.gamE φ (Φ x₀))) := by
-        rw [probA, Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib]
+        simp only [probA]
+        rw [Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib]
         refine Finset.sum_congr rfl fun x₀ _ => ?_
         have hd0 : 0 ≤ D.dbar ℓ θ x₀ := D.dbar_nonneg ℓ θ x₀
         have hsq : Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
@@ -3052,8 +3054,10 @@ theorem DA_le :
         ≤ YA / 2 + Cst ^ 2 * D.SA Φ A / 2 := by
       have hsY : Real.sqrt YA ^ 2 = YA := Real.sq_sqrt hYA0
       have hsS : Real.sqrt (D.SA Φ A) ^ 2 = D.SA Φ A := Real.sq_sqrt hSA0
+      have hprod : Cst ^ 2 * Real.sqrt (D.SA Φ A) ^ 2
+          = Cst ^ 2 * D.SA Φ A := by rw [hsS]
       nlinarith [sq_nonneg (Real.sqrt YA - Cst * Real.sqrt (D.SA Φ A)),
-        Real.sqrt_nonneg YA, Real.sqrt_nonneg (D.SA Φ A), hCst0]
+        hsY, hprod]
     linarith
   -- step 3: assemble, `√(a+b) ≤ √a + √b`
   have hsqrt_add : ∀ a b : ℝ, 0 ≤ a → 0 ≤ b →
