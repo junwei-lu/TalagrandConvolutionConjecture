@@ -794,6 +794,115 @@ lemma flux_time_integral_le_one (hf : ∀ x, 0 < f x) (hm : unifE f = 1)
     rwa [hm] at hstep
   linarith
 
+/-! ### Glue for the master bound: monotone convergence and joint measurability -/
+
+private lemma lintegral_Ioi_le_of_intervalIntegral_le {g : ℝ → ℝ}
+    (hmeas : Measurable g) (hnn : ∀ s, 0 ≤ g s)
+    (hint : ∀ b : ℝ, IntervalIntegrable g volume 0 b)
+    {C : ℝ} (hC : ∀ S : ℝ, 0 ≤ S → ∫ s in (0 : ℝ)..S, g s ≤ C) :
+    ∫⁻ s in Set.Ioi (0 : ℝ), ENNReal.ofReal (g s) ≤ ENNReal.ofReal C := by
+  have hmono : Monotone fun k : ℕ =>
+      (Set.Ioc (0 : ℝ) (k : ℝ)).indicator (fun s => ENNReal.ofReal (g s)) := by
+    intro k l hkl
+    refine Set.indicator_le_indicator_of_subset ?_ fun _ => zero_le _
+    exact Set.Ioc_subset_Ioc_right (by exact_mod_cast hkl)
+  have hptw : ∀ s : ℝ,
+      ⨆ k : ℕ, (Set.Ioc (0 : ℝ) (k : ℝ)).indicator (fun s => ENNReal.ofReal (g s)) s
+      = (Set.Ioi (0 : ℝ)).indicator (fun s => ENNReal.ofReal (g s)) s := by
+    intro s
+    by_cases hs : (0 : ℝ) < s
+    · obtain ⟨k, hk⟩ := exists_nat_ge s
+      rw [Set.indicator_of_mem (show s ∈ Set.Ioi (0 : ℝ) from hs)]
+      refine le_antisymm (iSup_le fun m => ?_) (le_iSup_of_le k ?_)
+      · by_cases hm : s ∈ Set.Ioc (0 : ℝ) (m : ℝ)
+        · rw [Set.indicator_of_mem hm]
+        · rw [Set.indicator_of_notMem hm]; exact zero_le _
+      · rw [Set.indicator_of_mem (Set.mem_Ioc.2 ⟨hs, hk⟩)]
+    · rw [Set.indicator_of_notMem (show s ∉ Set.Ioi (0 : ℝ) from hs)]
+      refine le_antisymm (iSup_le fun m => ?_) (zero_le _)
+      rw [Set.indicator_of_notMem fun hm => hs hm.1]
+  calc ∫⁻ s in Set.Ioi (0 : ℝ), ENNReal.ofReal (g s)
+      = ∫⁻ s, (Set.Ioi (0 : ℝ)).indicator (fun s => ENNReal.ofReal (g s)) s :=
+        (MeasureTheory.lintegral_indicator measurableSet_Ioi _).symm
+    _ = ∫⁻ s, ⨆ k : ℕ,
+          (Set.Ioc (0 : ℝ) (k : ℝ)).indicator (fun s => ENNReal.ofReal (g s)) s := by
+        simp_rw [hptw]
+    _ = ⨆ k : ℕ, ∫⁻ s,
+          (Set.Ioc (0 : ℝ) (k : ℝ)).indicator (fun s => ENNReal.ofReal (g s)) s :=
+        MeasureTheory.lintegral_iSup
+          (fun _ => hmeas.ennreal_ofReal.indicator measurableSet_Ioc) hmono
+    _ ≤ ENNReal.ofReal C := by
+        refine iSup_le fun k => ?_
+        rw [MeasureTheory.lintegral_indicator measurableSet_Ioc]
+        have hk0 : (0 : ℝ) ≤ (k : ℝ) := Nat.cast_nonneg k
+        have hIo : MeasureTheory.IntegrableOn g (Set.Ioc (0 : ℝ) (k : ℝ)) volume :=
+          (intervalIntegrable_iff_integrableOn_Ioc_of_le hk0).1 (hint (k : ℝ))
+        rw [← MeasureTheory.ofReal_integral_eq_lintegral_ofReal hIo
+          (Filter.Eventually.of_forall hnn)]
+        refine ENNReal.ofReal_le_ofReal ?_
+        rw [← intervalIntegral.integral_of_le hk0]
+        exact hC _ hk0
+
+private lemma intervalIntegrable_levelFlux_level (f : Cube n → ℝ) (s a b : ℝ) :
+    IntervalIntegrable (fun u => levelFlux f s u) volume a b := by
+  have h : (fun u => levelFlux f s u)
+      = fun u => (∑ x : Cube n, ∑ i, fluxTerm f s u x i) / 2 ^ n / 4 := by
+    funext u; rw [levelFlux_eq_fluxTerm, unifE]
+  rw [h]
+  exact ((intervalIntegrable_finsum _ a b fun x =>
+    intervalIntegrable_finsum _ a b fun i =>
+      intervalIntegrable_fluxTerm f s x i a b).div_const _).div_const _
+
+private lemma measurable_levelFlux_prod (f : Cube n → ℝ) :
+    Measurable fun p : ℝ × ℝ => levelFlux f p.1 p.2 := by
+  have hterm : ∀ (x : Cube n) (i : Fin n),
+      Measurable fun p : ℝ × ℝ => fluxTerm f p.1 p.2 x i := by
+    intro x i
+    have hca : Continuous fun p : ℝ × ℝ => heatAt f p.1 x :=
+      (continuous_heatAt f x).comp continuous_fst
+    have hcb : Continuous fun p : ℝ × ℝ => heatAt f p.1 (flipCoord i x) :=
+      (continuous_heatAt f (flipCoord i x)).comp continuous_fst
+    have hce : Continuous fun p : ℝ × ℝ => Real.exp p.2 :=
+      Real.continuous_exp.comp continuous_snd
+    have hTm : MeasurableSet {p : ℝ × ℝ | Real.exp p.2 ∈
+        Set.uIoc (heatAt f p.1 x) (heatAt f p.1 (flipCoord i x))} := by
+      have hTeq : {p : ℝ × ℝ | Real.exp p.2 ∈
+          Set.uIoc (heatAt f p.1 x) (heatAt f p.1 (flipCoord i x))}
+          = ({p : ℝ × ℝ | heatAt f p.1 x < Real.exp p.2}
+              ∩ {p : ℝ × ℝ | Real.exp p.2 ≤ heatAt f p.1 (flipCoord i x)})
+            ∪ ({p : ℝ × ℝ | heatAt f p.1 (flipCoord i x) < Real.exp p.2}
+              ∩ {p : ℝ × ℝ | Real.exp p.2 ≤ heatAt f p.1 x}) := by
+        ext p
+        simp only [Set.mem_setOf_eq, Set.mem_union, Set.mem_inter_iff, Set.mem_uIoc]
+      rw [hTeq]
+      exact ((measurableSet_lt hca.measurable hce.measurable).inter
+          (measurableSet_le hce.measurable hcb.measurable)).union
+        ((measurableSet_lt hcb.measurable hce.measurable).inter
+          (measurableSet_le hce.measurable hca.measurable))
+    have heq : (fun p : ℝ × ℝ => fluxTerm f p.1 p.2 x i)
+        = {p : ℝ × ℝ | Real.exp p.2 ∈
+            Set.uIoc (heatAt f p.1 x) (heatAt f p.1 (flipCoord i x))}.indicator
+            (fun p => |heatAt f p.1 (flipCoord i x) - heatAt f p.1 x|) := by
+      funext p
+      rw [fluxTerm]
+      by_cases h : Real.exp p.2 ∈
+          Set.uIoc (heatAt f p.1 x) (heatAt f p.1 (flipCoord i x))
+      · rw [Set.indicator_of_mem h, Set.indicator_of_mem (show p ∈ {p : ℝ × ℝ |
+          Real.exp p.2 ∈ Set.uIoc (heatAt f p.1 x)
+            (heatAt f p.1 (flipCoord i x))} from h)]
+      · rw [Set.indicator_of_notMem h, Set.indicator_of_notMem (show p ∉ {p : ℝ × ℝ |
+          Real.exp p.2 ∈ Set.uIoc (heatAt f p.1 x)
+            (heatAt f p.1 (flipCoord i x))} from h)]
+    rw [heq]
+    exact (hcb.sub hca).abs.measurable.indicator hTm
+  have h : (fun p : ℝ × ℝ => levelFlux f p.1 p.2)
+      = fun p : ℝ × ℝ => (∑ x : Cube n, ∑ i, fluxTerm f p.1 p.2 x i) / 2 ^ n / 4 := by
+    funext p; rw [levelFlux_eq_fluxTerm, unifE]
+  rw [h]
+  exact ((Finset.measurable_sum _ fun x _ =>
+    Finset.measurable_sum _ fun i _ => hterm x i).div_const _).div_const _
+
+set_option maxHeartbeats 1000000 in
 /-- **Time-smoothed anti-concentration profile bound** [C Lemma 4]: there is a
 universal constant `C` such that for every `n`, strictly positive density `f`,
 and `ℓ > 2`, `∫_0^∞ 𝔄_s((ℓ,ℓ+1]) ds ≤ C/ℓ` (as a Lebesgue integral of the
@@ -803,7 +912,70 @@ theorem profile_time_integral_le :
       unifE f = 1 → ∀ ℓ : ℝ, 2 < ℓ →
       ∫⁻ s in Set.Ioi (0 : ℝ), ENNReal.ofReal (profile f s (Set.Ioc ℓ (ℓ + 1)))
         ≤ ENNReal.ofReal (C / ℓ) := by
-  sorry
+  refine ⟨1536, by norm_num, ?_⟩
+  intro n f hf hm ℓ hℓ
+  have hℓ0 : (0 : ℝ) < ℓ := by linarith
+  have hle12 : ℓ - 1 ≤ ℓ + 2 := by linarith
+  -- (i) the pointwise chain: entropy, LSI, coarea
+  have hreal : ∀ s : ℝ, 0 ≤ s →
+      profile f s (Set.Ioc ℓ (ℓ + 1))
+        ≤ 512 / ℓ * ∫ u in ℓ - 1..ℓ + 2, levelFlux f s u := by
+    intro s hs
+    have h1 := profile_le_ent' hf hm hs ℓ (le_of_lt hℓ)
+    have h2 := cube_LSI (h := localizedTest f s ℓ)
+      (fun x => mul_nonneg (heatAt_pos hf hs x).le (sq_nonneg _))
+    have h3 := dirichlet_le_flux_integral' hf hs ℓ
+    rw [div_mul_eq_mul_div, le_div_iff₀ hℓ0]
+    linarith
+  -- (ii) the flux is jointly measurable, hence Tonelli applies
+  have hjm : Measurable fun p : ℝ × ℝ => ENNReal.ofReal (levelFlux f p.1 p.2) :=
+    (measurable_levelFlux_prod f).ennreal_ofReal
+  -- (iii) the inner (time) integral of the flux is at most one for each level
+  have hinner : ∀ u : ℝ, 0 < u →
+      ∫⁻ s in Set.Ioi (0 : ℝ), ENNReal.ofReal (levelFlux f s u) ≤ 1 := by
+    intro u hu
+    have hmeas : Measurable fun s => levelFlux f s u :=
+      Measurable.of_uncurry_right (measurable_levelFlux_prod f)
+    have := lintegral_Ioi_le_of_intervalIntegral_le hmeas
+      (fun s => levelFlux_nonneg f s u)
+      (fun b => intervalIntegrable_levelFlux f u 0 b)
+      (fun S hS => flux_time_integral_le_one hf hm u hu hS)
+    rwa [ENNReal.ofReal_one] at this
+  calc ∫⁻ s in Set.Ioi (0 : ℝ), ENNReal.ofReal (profile f s (Set.Ioc ℓ (ℓ + 1)))
+      ≤ ∫⁻ s in Set.Ioi (0 : ℝ),
+          ENNReal.ofReal (512 / ℓ * ∫ u in ℓ - 1..ℓ + 2, levelFlux f s u) := by
+        refine MeasureTheory.lintegral_mono_ae ?_
+        filter_upwards [MeasureTheory.ae_restrict_mem measurableSet_Ioi] with s hs
+        exact ENNReal.ofReal_le_ofReal (hreal s (le_of_lt hs))
+    _ = ∫⁻ s in Set.Ioi (0 : ℝ), ENNReal.ofReal (512 / ℓ)
+          * ∫⁻ u in Set.Ioc (ℓ - 1) (ℓ + 2), ENNReal.ofReal (levelFlux f s u) := by
+        refine MeasureTheory.lintegral_congr fun s => ?_
+        rw [ENNReal.ofReal_mul (by positivity)]
+        congr 1
+        rw [intervalIntegral.integral_of_le hle12]
+        exact MeasureTheory.ofReal_integral_eq_lintegral_ofReal
+          ((intervalIntegrable_iff_integrableOn_Ioc_of_le hle12).1
+            (intervalIntegrable_levelFlux_level f s (ℓ - 1) (ℓ + 2)))
+          (Filter.Eventually.of_forall fun u => levelFlux_nonneg f s u)
+    _ = ENNReal.ofReal (512 / ℓ) * ∫⁻ s in Set.Ioi (0 : ℝ),
+          ∫⁻ u in Set.Ioc (ℓ - 1) (ℓ + 2), ENNReal.ofReal (levelFlux f s u) :=
+        MeasureTheory.lintegral_const_mul' _ _ ENNReal.ofReal_ne_top
+    _ = ENNReal.ofReal (512 / ℓ) * ∫⁻ u in Set.Ioc (ℓ - 1) (ℓ + 2),
+          ∫⁻ s in Set.Ioi (0 : ℝ), ENNReal.ofReal (levelFlux f s u) := by
+        rw [MeasureTheory.lintegral_lintegral_swap hjm.aemeasurable]
+    _ ≤ ENNReal.ofReal (512 / ℓ) * ∫⁻ _u in Set.Ioc (ℓ - 1) (ℓ + 2), 1 := by
+        refine mul_le_mul_left' (MeasureTheory.lintegral_mono_ae ?_) _
+        filter_upwards [MeasureTheory.ae_restrict_mem measurableSet_Ioc] with u hu
+        exact hinner u (by linarith [hu.1])
+    _ = ENNReal.ofReal (512 / ℓ) * ENNReal.ofReal 3 := by
+        rw [MeasureTheory.lintegral_const, one_mul,
+          MeasureTheory.Measure.restrict_apply_univ, Real.volume_Ioc]
+        norm_num
+    _ = ENNReal.ofReal (1536 / ℓ) := by
+        rw [← ENNReal.ofReal_mul (by positivity)]
+        congr 1
+        field_simp
+        norm_num
 
 /-- Windowed corollary of [C Lemma 4], the form consumed by [LGF §3]:
 for `0 ≤ s₁ ≤ s₂` and `ℓ > 2`,
