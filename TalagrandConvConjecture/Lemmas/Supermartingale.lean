@@ -202,9 +202,9 @@ private lemma NW_false_eq (ℓ θ : ℝ) (x₀ : Cube n) (t : ℝ) (x y : Cube n
         * Real.exp (D.dbar ℓ θ x₀ * (ℓ + 1 - D.F t x)) := by
   rw [D.NW_true, D.NW_false, ← Real.exp_add]; congr 1; ring
 
-private lemma F_flip_eq {t : ℝ} (i : Fin n) (x : Cube n) :
+private lemma F_flip_eq {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (x : Cube n) :
     D.F t (flipCoord i x) = D.F t x + Real.log (D.Y t i x) := by
-  have := D.F_flipCoord_sub t i x; linarith
+  have := D.F_flipCoord_sub_of_le ht i x; linarith
 
 /-- Synchronized flip, alive landing: the weight ratio is `X_i·Y_i^{δ̄-1}`. -/
 private lemma NW_flip_both (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T)
@@ -220,7 +220,7 @@ private lemma NW_flip_both (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ 
     rw [Real.exp_add, Real.exp_log hX, Real.rpow_def_of_pos hY]
   rw [D.NW_true, D.NW_true, hc, ← Real.exp_add]
   congr 1
-  rw [D.F_flip_eq i x, D.F_flip_eq i y]; ring
+  rw [D.F_flip_eq ht i x, D.F_flip_eq ht i y]; ring
 
 /-- `W`-only flip: the weight ratio is `X_i`. -/
 private lemma NW_flip_W (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T)
@@ -230,7 +230,7 @@ private lemma NW_flip_W (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T
   have hX : 0 < D.Y t i y := D.Y_pos ht i y
   rw [D.NW_true, D.NW_true, ← Real.exp_log hX, ← Real.exp_add]
   congr 1
-  rw [D.F_flip_eq i y]; ring
+  rw [D.F_flip_eq ht i y]; ring
 
 /-- `V`-only flip, alive landing: the weight ratio is `Y_i^{δ̄-1}`. -/
 private lemma NW_flip_V (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T)
@@ -240,7 +240,7 @@ private lemma NW_flip_V (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T
   have hY : 0 < D.Y t i x := D.Y_pos ht i x
   rw [D.NW_true, D.NW_true, Real.rpow_def_of_pos hY, ← Real.exp_add]
   congr 1
-  rw [D.F_flip_eq i x]; ring
+  rw [D.F_flip_eq ht i x]; ring
 
 /-- Synchronized flip out of the dead sector: the weight ratio is `X_i/Y_i`. -/
 private lemma NW_flip_both_dead (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T)
@@ -254,7 +254,7 @@ private lemma NW_flip_both_dead (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t
     rw [Real.exp_sub, Real.exp_log hX, Real.exp_log hY]
   rw [D.NW_false, D.NW_false, hc, ← Real.exp_add]
   congr 1
-  rw [D.F_flip_eq i x, D.F_flip_eq i y]; ring
+  rw [D.F_flip_eq ht i x, D.F_flip_eq ht i y]; ring
 
 /-! ### Expansion of the jump-rate pairing -/
 

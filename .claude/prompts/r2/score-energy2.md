@@ -44,3 +44,8 @@ continuous on compact cells — continuity of `π` from the flow, of `Y` from
 
 Gate: `lake build TalagrandConvConjecture.Lemmas.ScoreEnergy` — zero sorry.
 Commit.
+
+NOTE (added after prompt creation): `D.cflow_alive_cell` is now PUBLIC in
+Flow/Coupling.lean — the per-cell alive-support invariant. Use it directly for
+the in-cell "alive mass has F ≤ ℓ+1" step (combine with the file's private
+`cell_F_le`); do not re-derive it.
