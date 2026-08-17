@@ -371,6 +371,225 @@ private lemma jrate_pair_false (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
     exact Prod.ext_iff.mpr ⟨h1, Prod.ext_iff.mpr ⟨h2, h3⟩⟩
   · rintro rfl; exact ⟨rfl, rfl, by simp⟩
 
+/-! ### The pointwise cell inequality [LGF, proof of Prop 4.1] -/
+
+private lemma sum_regroup {m : ℕ} (Q a c : ℝ) (F u v w : Fin m → ℝ) :
+    (∑ i, F i) + (Q * ((∑ i, u i) - c * (∑ i, v i)) * a + Q * (-(∑ i, w i)))
+      = ∑ i, (F i + Q * (u i - c * v i) * a + Q * (-(w i))) := by
+  have e0 : ∑ i, (u i - c * v i) = (∑ i, u i) - c * (∑ i, v i) := by
+    rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+  have e1 : Q * ((∑ i, u i) - c * (∑ i, v i)) * a = ∑ i, Q * (u i - c * v i) * a := by
+    rw [← e0, Finset.mul_sum, Finset.sum_mul]
+  have e2 : Q * (-(∑ i, w i)) = ∑ i, Q * (-(w i)) := by
+    simp [Finset.mul_sum]
+  rw [e1, e2, ← Finset.sum_add_distrib, ← Finset.sum_add_distrib]
+  exact Finset.sum_congr rfl fun i _ => by ring
+
+/-- Dead sector: the weighted pairing has exactly zero drift. -/
+private lemma bracket_dead {ℓ θ : ℝ} {x₀ : Cube n} {B : Set (Cube n)} {t : ℝ}
+    (ht : t ≤ D.T) {Hf : Cube n → ℝ} (x y : Cube n) :
+    (∑ τ : JSt n, D.jrate (D.dbar ℓ θ x₀) B t (x, y, false) τ *
+        (D.NW ℓ θ x₀ t τ * Hf τ.2.1 - D.NW ℓ θ x₀ t (x, y, false) * Hf y))
+      + (D.NW ℓ θ x₀ t (x, y, false) * ((∑ i, D.Sc t i y)
+            - 1 * (∑ i, D.Sc t i x)) * Hf y
+         + D.NW ℓ θ x₀ t (x, y, false) * (-(D.revGen t Hf y))) = 0 := by
+  rw [D.jrate_pair_false, revGen, sum_regroup]
+  refine Finset.sum_eq_zero fun i _ => ?_
+  show D.Y t i x / 2 * (D.NW ℓ θ x₀ t (flipCoord i x, flipCoord i y, false) * Hf (flipCoord i y)
+        - D.NW ℓ θ x₀ t (x, y, false) * Hf y)
+      + D.NW ℓ θ x₀ t (x, y, false) * (D.Sc t i y - 1 * D.Sc t i x) * Hf y
+      + D.NW ℓ θ x₀ t (x, y, false) * (-(D.Y t i y * (Hf (flipCoord i y) - Hf y) / 2)) = 0
+  rw [D.NW_flip_both_dead ℓ θ x₀ ht i x y]
+  have hY : D.Y t i x ≠ 0 := (D.Y_pos ht i x).ne'
+  simp only [Sc]
+  field_simp
+  ring
+
+/-- Alive sector: the weighted pairing drifts down by the AM–GM defect. -/
+private lemma bracket_alive {ℓ θ : ℝ} {x₀ : Cube n} {B : Set (Cube n)} {t : ℝ}
+    (ht : t ≤ D.T) (hB : ∀ w : Cube n, w ∈ B → ℓ + 1 ≤ D.F t w)
+    {Hf : Cube n → ℝ} (hHnn : ∀ w, 0 ≤ Hf w) (x y : Cube n) :
+    (∑ τ : JSt n, D.jrate (D.dbar ℓ θ x₀) B t (x, y, true) τ *
+        (D.NW ℓ θ x₀ t τ * Hf τ.2.1 - D.NW ℓ θ x₀ t (x, y, true) * Hf y))
+      + (D.NW ℓ θ x₀ t (x, y, true) * ((∑ i, D.Sc t i y)
+            - (1 - D.dbar ℓ θ x₀) * (∑ i, D.Sc t i x)) * Hf y
+         + D.NW ℓ θ x₀ t (x, y, true) * (-(D.revGen t Hf y))) ≤ 0 := by
+  classical
+  have hdd0 : 0 ≤ D.dbar ℓ θ x₀ := D.dbar_nonneg ℓ θ x₀
+  have hdd1 : D.dbar ℓ θ x₀ ≤ 1 :=
+    le_of_lt (lt_trans (D.dbar_lt_half ℓ θ x₀) (by norm_num))
+  -- Step 1: bound the jump part coordinatewise.
+  have hjump : (∑ τ : JSt n, D.jrate (D.dbar ℓ θ x₀) B t (x, y, true) τ *
+        (D.NW ℓ θ x₀ t τ * Hf τ.2.1 - D.NW ℓ θ x₀ t (x, y, true) * Hf y))
+      ≤ ∑ i : Fin n, D.NW ℓ θ x₀ t (x, y, true) *
+          (D.Y t i y / 2 * Hf (flipCoord i y)
+            - (1 + D.Y t i x - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 * Hf y) := by
+    rw [D.jrate_pair_true]
+    refine Finset.sum_le_sum fun i _ => ?_
+    have hYi : 0 < D.Y t i x := D.Y_pos ht i x
+    have hXi : 0 < D.Y t i y := D.Y_pos ht i y
+    have hWp : 0 < D.NW ℓ θ x₀ t (x, y, true) := D.NW_pos ℓ θ x₀ t _
+    have hqp : 0 < D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) := Real.rpow_pos_of_pos hYi _
+    have hay : 0 ≤ Hf y := hHnn y
+    have hay' : 0 ≤ Hf (flipCoord i y) := hHnn _
+    have hpq : D.Y t i x * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1)
+        = D.Y t i x ^ D.dbar ℓ θ x₀ := by
+      have hh := Real.rpow_add hYi 1 (D.dbar ℓ θ x₀ - 1)
+      rw [Real.rpow_one] at hh
+      rw [show (1 : ℝ) + (D.dbar ℓ θ x₀ - 1) = D.dbar ℓ θ x₀ by ring] at hh
+      exact hh.symm
+    have hrq : D.Y t i x ^ (1 - D.dbar ℓ θ x₀) * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) = 1 := by
+      rw [← Real.rpow_add hYi,
+        show (1 - D.dbar ℓ θ x₀) + (D.dbar ℓ θ x₀ - 1) = (0 : ℝ) by ring, Real.rpow_zero]
+    -- landing bounds (dead landings are dominated by their alive forms)
+    have hT1 : D.NW ℓ θ x₀ t (flipCoord i x, flipCoord i y, decide (flipCoord i x ∉ B))
+          * Hf (flipCoord i y)
+        ≤ D.NW ℓ θ x₀ t (x, y, true) * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1))
+          * Hf (flipCoord i y) := by
+      by_cases hmem : flipCoord i x ∈ B
+      · rw [decide_eq_false (not_not_intro hmem)]
+        have hex : Real.exp (D.dbar ℓ θ x₀ * (ℓ + 1 - D.F t (flipCoord i x))) ≤ 1 := by
+          refine Real.exp_le_one_iff.mpr ?_
+          have := hB _ hmem
+          nlinarith
+        have hpos : 0 ≤ D.NW ℓ θ x₀ t (x, y, true)
+            * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1)) * Hf (flipCoord i y) := by
+          have : 0 < D.NW ℓ θ x₀ t (x, y, true)
+              * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1)) := by positivity
+          exact mul_nonneg this.le hay'
+        calc D.NW ℓ θ x₀ t (flipCoord i x, flipCoord i y, false) * Hf (flipCoord i y)
+            = (D.NW ℓ θ x₀ t (x, y, true)
+                * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1)) * Hf (flipCoord i y))
+              * Real.exp (D.dbar ℓ θ x₀ * (ℓ + 1 - D.F t (flipCoord i x))) := by
+              rw [D.NW_false_eq ℓ θ x₀ t (flipCoord i x) (flipCoord i y),
+                D.NW_flip_both ℓ θ x₀ ht i x y]; ring
+          _ ≤ (D.NW ℓ θ x₀ t (x, y, true)
+                * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1)) * Hf (flipCoord i y)) * 1 :=
+              mul_le_mul_of_nonneg_left hex hpos
+          _ = _ := mul_one _
+      · rw [decide_eq_true hmem, D.NW_flip_both ℓ θ x₀ ht i x y]
+    have hT3 : D.NW ℓ θ x₀ t (flipCoord i x, y, decide (flipCoord i x ∉ B)) * Hf y
+        ≤ D.NW ℓ θ x₀ t (x, y, true) * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) * Hf y := by
+      by_cases hmem : flipCoord i x ∈ B
+      · rw [decide_eq_false (not_not_intro hmem)]
+        have hex : Real.exp (D.dbar ℓ θ x₀ * (ℓ + 1 - D.F t (flipCoord i x))) ≤ 1 := by
+          refine Real.exp_le_one_iff.mpr ?_
+          have := hB _ hmem
+          nlinarith
+        have hpos : 0 ≤ D.NW ℓ θ x₀ t (x, y, true)
+            * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) * Hf y := by
+          have : 0 < D.NW ℓ θ x₀ t (x, y, true) * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) := by
+            positivity
+          exact mul_nonneg this.le hay
+        calc D.NW ℓ θ x₀ t (flipCoord i x, y, false) * Hf y
+            = (D.NW ℓ θ x₀ t (x, y, true) * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) * Hf y)
+              * Real.exp (D.dbar ℓ θ x₀ * (ℓ + 1 - D.F t (flipCoord i x))) := by
+              rw [D.NW_false_eq ℓ θ x₀ t (flipCoord i x) y,
+                D.NW_flip_V ℓ θ x₀ ht i x y]; ring
+          _ ≤ (D.NW ℓ θ x₀ t (x, y, true) * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) * Hf y) * 1 :=
+              mul_le_mul_of_nonneg_left hex hpos
+          _ = _ := mul_one _
+      · rw [decide_eq_true hmem, D.NW_flip_V ℓ θ x₀ ht i x y]
+    have hT2 : D.NW ℓ θ x₀ t (x, flipCoord i y, true)
+        = D.NW ℓ θ x₀ t (x, y, true) * D.Y t i y := D.NW_flip_W ℓ θ x₀ ht i x y
+    show (if D.Y t i x < 1 then D.Y t i x / 2
+            else D.Y t i x ^ (1 - D.dbar ℓ θ x₀) / 2)
+          * (D.NW ℓ θ x₀ t (flipCoord i x, flipCoord i y, decide (flipCoord i x ∉ B))
+              * Hf (flipCoord i y) - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+        + (if D.Y t i x < 1 then (1 - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 else 0)
+          * (D.NW ℓ θ x₀ t (x, flipCoord i y, true) * Hf (flipCoord i y)
+              - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+        + (if D.Y t i x < 1 then 0
+            else (D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) / 2)
+          * (D.NW ℓ θ x₀ t (flipCoord i x, y, decide (flipCoord i x ∉ B)) * Hf y
+              - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+        ≤ _
+    by_cases hY1 : D.Y t i x < 1
+    · rw [if_pos hY1, if_pos hY1, if_pos hY1, hT2]
+      have hR1 : (0 : ℝ) ≤ D.Y t i x / 2 := by linarith
+      have hstep := mul_le_mul_of_nonneg_left
+        (show D.NW ℓ θ x₀ t (flipCoord i x, flipCoord i y, decide (flipCoord i x ∉ B))
+              * Hf (flipCoord i y) - D.NW ℓ θ x₀ t (x, y, true) * Hf y
+            ≤ D.NW ℓ θ x₀ t (x, y, true) * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1))
+              * Hf (flipCoord i y) - D.NW ℓ θ x₀ t (x, y, true) * Hf y by linarith) hR1
+      have hid : D.Y t i x / 2 *
+            (D.NW ℓ θ x₀ t (x, y, true) * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1))
+              * Hf (flipCoord i y) - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+          + (1 - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 *
+            (D.NW ℓ θ x₀ t (x, y, true) * D.Y t i y * Hf (flipCoord i y)
+              - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+          + 0 * (D.NW ℓ θ x₀ t (flipCoord i x, y, decide (flipCoord i x ∉ B)) * Hf y
+              - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+          = D.NW ℓ θ x₀ t (x, y, true) *
+            (D.Y t i y / 2 * Hf (flipCoord i y)
+              - (1 + D.Y t i x - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 * Hf y) := by
+        rw [← hpq]; ring
+      linarith [hstep, hid]
+    · rw [if_neg hY1, if_neg hY1, if_neg hY1, hT2]
+      have hR1 : (0 : ℝ) ≤ D.Y t i x ^ (1 - D.dbar ℓ θ x₀) / 2 :=
+        le_of_lt (by positivity)
+      have hR3 : (0 : ℝ) ≤ (D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) / 2 := by
+        have h1 : (1 : ℝ) ≤ D.Y t i x := not_lt.mp hY1
+        have := Real.rpow_le_rpow_of_exponent_le h1
+          (show 1 - D.dbar ℓ θ x₀ ≤ (1 : ℝ) by linarith)
+        rw [Real.rpow_one] at this
+        linarith
+      have hstep1 := mul_le_mul_of_nonneg_left
+        (show D.NW ℓ θ x₀ t (flipCoord i x, flipCoord i y, decide (flipCoord i x ∉ B))
+              * Hf (flipCoord i y) - D.NW ℓ θ x₀ t (x, y, true) * Hf y
+            ≤ D.NW ℓ θ x₀ t (x, y, true) * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1))
+              * Hf (flipCoord i y) - D.NW ℓ θ x₀ t (x, y, true) * Hf y by linarith) hR1
+      have hstep3 := mul_le_mul_of_nonneg_left
+        (show D.NW ℓ θ x₀ t (flipCoord i x, y, decide (flipCoord i x ∉ B)) * Hf y
+              - D.NW ℓ θ x₀ t (x, y, true) * Hf y
+            ≤ D.NW ℓ θ x₀ t (x, y, true) * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) * Hf y
+              - D.NW ℓ θ x₀ t (x, y, true) * Hf y by linarith) hR3
+      have hid : D.Y t i x ^ (1 - D.dbar ℓ θ x₀) / 2 *
+            (D.NW ℓ θ x₀ t (x, y, true) * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1))
+              * Hf (flipCoord i y) - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+          + 0 * (D.NW ℓ θ x₀ t (x, y, true) * D.Y t i y * Hf (flipCoord i y)
+              - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+          + (D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) / 2 *
+            (D.NW ℓ θ x₀ t (x, y, true) * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) * Hf y
+              - D.NW ℓ θ x₀ t (x, y, true) * Hf y)
+          = D.NW ℓ θ x₀ t (x, y, true) *
+            (D.Y t i y / 2 * Hf (flipCoord i y)
+              - (1 + D.Y t i x - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 * Hf y) := by
+        linear_combination (D.NW ℓ θ x₀ t (x, y, true) * D.Y t i y * Hf (flipCoord i y) / 2
+            - D.NW ℓ θ x₀ t (x, y, true) * Hf y / 2) * hrq
+          + (D.NW ℓ θ x₀ t (x, y, true) * Hf y / 2) * hpq
+      linarith [hstep1, hstep3, hid]
+  -- Step 2: regroup and apply AM–GM coordinatewise.
+  refine le_trans (add_le_add hjump le_rfl) ?_
+  rw [revGen, sum_regroup]
+  refine Finset.sum_nonpos fun i _ => ?_
+  have hYi : 0 < D.Y t i x := D.Y_pos ht i x
+  have hWp : 0 < D.NW ℓ θ x₀ t (x, y, true) := D.NW_pos ℓ θ x₀ t _
+  have hay : 0 ≤ Hf y := hHnn y
+  have hAM := rpow_le_one_sub_add_mul hYi hdd0 hdd1
+  show D.NW ℓ θ x₀ t (x, y, true) *
+        (D.Y t i y / 2 * Hf (flipCoord i y)
+          - (1 + D.Y t i x - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 * Hf y)
+      + D.NW ℓ θ x₀ t (x, y, true) *
+        (D.Sc t i y - (1 - D.dbar ℓ θ x₀) * D.Sc t i x) * Hf y
+      + D.NW ℓ θ x₀ t (x, y, true) *
+        (-(D.Y t i y * (Hf (flipCoord i y) - Hf y) / 2)) ≤ 0
+  have hkey : D.NW ℓ θ x₀ t (x, y, true) *
+        (D.Y t i y / 2 * Hf (flipCoord i y)
+          - (1 + D.Y t i x - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 * Hf y)
+      + D.NW ℓ θ x₀ t (x, y, true) *
+        (D.Sc t i y - (1 - D.dbar ℓ θ x₀) * D.Sc t i x) * Hf y
+      + D.NW ℓ θ x₀ t (x, y, true) *
+        (-(D.Y t i y * (Hf (flipCoord i y) - Hf y) / 2))
+      = D.NW ℓ θ x₀ t (x, y, true) * Hf y *
+        ((D.Y t i x ^ D.dbar ℓ θ x₀ - (1 - D.dbar ℓ θ x₀)
+          - D.dbar ℓ θ x₀ * D.Y t i x) / 2) := by
+    simp only [Sc]; ring
+  rw [hkey]
+  have h1 : D.Y t i x ^ D.dbar ℓ θ x₀ - (1 - D.dbar ℓ θ x₀)
+      - D.dbar ℓ θ x₀ * D.Y t i x ≤ 0 := by linarith
+  nlinarith [mul_nonneg hWp.le hay]
+
 /-- **Weighted terminal comparison** [LGF Prop 4.1, `N`-weighted form]:
 for every nonnegative terminal test `h` and every starting point,
 `𝔼_{x₀}[N_{T_o}·h(W_{T_o})] ≤ 𝔼_{x₀}[h(V_{T_o})]`. -/
