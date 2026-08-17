@@ -1898,6 +1898,228 @@ private lemma hasDerivAt_Qtest (φ : Cube n → ℝ) {t : ℝ} (ht : t < D.T)
   rw [← hfin, hfun]
   exact HasDerivAt.sum (u := (Finset.univ : Finset (Cube n))) fun ζ _ => key ζ
 
+/-- The conditioned-power/bridge bound on `∑_i pgm²` ([LGF eq (4.17)]'s
+engine, extracted for reuse by the `q²`-perturbation). -/
+private lemma pgm_sq_sum_le {ℓ θ t : ℝ} (ht : t ≤ obsT)
+    (φ : Cube n → ℝ) (x₀ : Cube n) (x y : Cube n) :
+    ∑ i, D.pgm φ ℓ θ t x₀ i x y ^ 2
+      ≤ 8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 * D.Gam φ t x y := by
+  have htT : t < D.T := lt_of_le_of_lt ht D.obsT_lt_T
+  have hC : ∀ i : Fin n, D.pgm φ ℓ θ t x₀ i x y ^ 2
+      ≤ 8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 *
+          ∑ ζ : Cube n, D.Hlik t ζ x *
+            (D.lam t i x ζ * (D.aB t ^ 2 + D.bB t ^ 2)
+              * dmext φ i (D.mB t x y ζ) ^ 2) := by
+    intro i
+    have hw := sq_weighted_le (Finset.univ : Finset (Cube n)) (fun ζ => D.Hlik t ζ x)
+      (fun ζ => 2 * |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ|
+        * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|)
+      (fun ζ _ => D.Hlik_nonneg htT.le ζ x)
+    rw [D.sum_Hlik htT.le x, one_mul] at hw
+    refine le_trans hw ?_
+    rw [Finset.mul_sum]
+    refine Finset.sum_le_sum fun ζ _ => ?_
+    have hH := D.Hlik_nonneg htT.le ζ x
+    have hcpb := D.conditioned_power_bound (ℓ := ℓ) (θ := θ) (x₀ := x₀) ht i x ζ
+    have hcpb' : (powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ) ^ 2
+        ≤ kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 * D.lam t i x ζ := by
+      simpa only [pwt] using hcpb
+    have hab2 : (D.aB t + D.bB t) ^ 2 ≤ 2 * (D.aB t ^ 2 + D.bB t ^ 2) := by
+      nlinarith [sq_nonneg (D.aB t - D.bB t)]
+    have hQ0 : (0 : ℝ) ≤ (D.aB t + D.bB t) ^ 2 := sq_nonneg _
+    have hR0 : (0 : ℝ) ≤ dmext φ i (D.mB t x y ζ) ^ 2 := sq_nonneg _
+    have hP'0 : (0 : ℝ)
+        ≤ kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 * D.lam t i x ζ :=
+      le_trans (sq_nonneg _) hcpb'
+    have hPQ : (powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ) ^ 2
+          * (D.aB t + D.bB t) ^ 2
+        ≤ (kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 * D.lam t i x ζ)
+          * (2 * (D.aB t ^ 2 + D.bB t ^ 2)) :=
+      mul_le_mul hcpb' hab2 hQ0 hP'0
+    have hsqexp : (2 * |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ|
+          * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|) ^ 2
+        = 4 * ((powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ) ^ 2
+            * (D.aB t + D.bB t) ^ 2) * dmext φ i (D.mB t x y ζ) ^ 2 := by
+      have e1 : |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ| ^ 2
+          = (powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ) ^ 2 := sq_abs _
+      have e2 : |dmext φ i (D.mB t x y ζ)| ^ 2
+          = dmext φ i (D.mB t x y ζ) ^ 2 := sq_abs _
+      calc (2 * |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ|
+              * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|) ^ 2
+          = 4 * (|powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ| ^ 2
+              * (D.aB t + D.bB t) ^ 2) * |dmext φ i (D.mB t x y ζ)| ^ 2 := by ring
+        _ = _ := by rw [e1, e2]
+    rw [hsqexp]
+    have h4 := mul_le_mul_of_nonneg_left hPQ (by norm_num : (0 : ℝ) ≤ 4)
+    have h5 := mul_le_mul_of_nonneg_right h4 hR0
+    have hfin : 4 * ((powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ) ^ 2
+          * (D.aB t + D.bB t) ^ 2) * dmext φ i (D.mB t x y ζ) ^ 2
+        ≤ 8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 *
+            (D.lam t i x ζ * (D.aB t ^ 2 + D.bB t ^ 2)
+              * dmext φ i (D.mB t x y ζ) ^ 2) := by
+      calc 4 * ((powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ) ^ 2
+              * (D.aB t + D.bB t) ^ 2) * dmext φ i (D.mB t x y ζ) ^ 2
+          ≤ 4 * ((kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 * D.lam t i x ζ)
+              * (2 * (D.aB t ^ 2 + D.bB t ^ 2))) * dmext φ i (D.mB t x y ζ) ^ 2 := h5
+        _ = _ := by ring
+    calc D.Hlik t ζ x * (4 * ((powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)
+            * D.pwt t i x ζ) ^ 2 * (D.aB t + D.bB t) ^ 2)
+              * dmext φ i (D.mB t x y ζ) ^ 2)
+        ≤ D.Hlik t ζ x * (8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 *
+            (D.lam t i x ζ * (D.aB t ^ 2 + D.bB t ^ 2)
+              * dmext φ i (D.mB t x y ζ) ^ 2)) := mul_le_mul_of_nonneg_left hfin hH
+      _ = 8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 *
+            (D.Hlik t ζ x * (D.lam t i x ζ * (D.aB t ^ 2 + D.bB t ^ 2)
+              * dmext φ i (D.mB t x y ζ) ^ 2)) := by ring
+  calc ∑ i, D.pgm φ ℓ θ t x₀ i x y ^ 2
+      ≤ ∑ i, 8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 *
+          ∑ ζ : Cube n, D.Hlik t ζ x *
+            (D.lam t i x ζ * (D.aB t ^ 2 + D.bB t ^ 2)
+              * dmext φ i (D.mB t x y ζ) ^ 2) :=
+        Finset.sum_le_sum fun i _ => hC i
+    _ = 8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 *
+          ∑ i, ∑ ζ : Cube n, D.Hlik t ζ x *
+            (D.lam t i x ζ * (D.aB t ^ 2 + D.bB t ^ 2)
+              * dmext φ i (D.mB t x y ζ) ^ 2) := by rw [Finset.mul_sum]
+    _ = 8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 * D.Gam φ t x y := by
+        refine congrArg _ ?_
+        rw [Gam, Finset.sum_comm]
+        exact Finset.sum_congr rfl fun ζ _ => by rw [Finset.mul_sum]
+
+/-- The `q²`-perturbation at one state (the analogue of `pertU` for the
+carré-du-champ chain [LGF eq (4.20)]). -/
+private noncomputable def pertQ (φ : Cube n → ℝ) (ℓ θ : ℝ) (x₀ : Cube n)
+    (t : ℝ) (x y : Cube n) : ℝ :=
+  ∑ i, (if D.Y t i x < 1 then
+      (1 - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 *
+        (D.Qtest φ t x (flipCoord i y) - D.Qtest φ t x y)
+    else
+      -((D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) / 2) *
+        (D.Qtest φ t (flipCoord i x) (flipCoord i y)
+          - D.Qtest φ t (flipCoord i x) y))
+
+/-- Pointwise bound on the `q²`-perturbation: twice the `pertU` bound
+(`|Δ(q²)| ≤ 2|Δq|` for `q ∈ [0,1]`) [LGF, proof of eq (4.21)]. -/
+private lemma abs_pertQ_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
+    (hθ : θ ≤ obsT) {x₀ : Cube n} {φ : Cube n → ℝ}
+    (hφ : ∀ w, φ w = 0 ∨ φ w = 1) (x y : Cube n) :
+    |D.pertQ φ ℓ θ x₀ t x y|
+      ≤ 2 * (Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a * D.dbar ℓ θ x₀
+        * Real.sqrt (∑ i, D.Sc t i x ^ 2) * Real.sqrt (D.Gam φ t x y)) := by
+  have htT : t < D.T := lt_of_le_of_lt ht D.obsT_lt_T
+  have hLam0 : (0 : ℝ) ≤ Lam D.a := le_trans zero_le_one (one_le_Lam D.ha0 D.ha1)
+  have hd0 : (0 : ℝ) ≤ D.dbar ℓ θ x₀ := D.dbar_nonneg ℓ θ x₀
+  have hk1 : 1 < kappa D.a := one_lt_kappa D.ha0 D.ha1
+  -- (B') per-coordinate modulus bound with the extra factor 2
+  have hB : ∀ i : Fin n,
+      |(if D.Y t i x < 1 then
+          (1 - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 *
+            (D.Qtest φ t x (flipCoord i y) - D.Qtest φ t x y)
+        else
+          -((D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) / 2) *
+            (D.Qtest φ t (flipCoord i x) (flipCoord i y)
+              - D.Qtest φ t (flipCoord i x) y))|
+        ≤ |D.Sc t i x| * (2 * D.pgm φ ℓ θ t x₀ i x y) := by
+    intro i
+    have hYpos : 0 < D.Y t i x := D.Y_pos htT.le i x
+    have hq01 : ∀ ζ v w, D.qB φ t ζ v w ∈ Set.Icc (0:ℝ) 1 :=
+      fun ζ v w => D.qB_mem01 hφ ht ζ v w
+    by_cases hY : D.Y t i x < 1
+    · -- `W`-only branch: `Δ_i^y Q = ∑_ζ H·(q'+q)·Δ_i^y q`
+      have hs : 0 < D.Sc t i x := by simp only [Sc]; linarith
+      have hcoef : (1 - D.Y t i x ^ D.dbar ℓ θ x₀) / 2
+          = powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.Sc t i x := by
+        simp only [Sc]; exact one_sub_rpow_eq hYpos hY
+      have hdiff : D.Qtest φ t x (flipCoord i y) - D.Qtest φ t x y
+          = ∑ ζ : Cube n, D.Hlik t ζ x *
+              ((D.qB φ t ζ x (flipCoord i y) + D.qB φ t ζ x y) *
+                (-2 * D.mB t x y ζ i * dmext φ i (D.mB t x y ζ))) := by
+        rw [Qtest, Qtest, ← Finset.sum_sub_distrib]
+        refine Finset.sum_congr rfl fun ζ _ => ?_
+        rw [← mul_sub]
+        congr 1
+        have hfac : D.qB φ t ζ x (flipCoord i y) ^ 2 - D.qB φ t ζ x y ^ 2
+            = (D.qB φ t ζ x (flipCoord i y) + D.qB φ t ζ x y) *
+              (D.qB φ t ζ x (flipCoord i y) - D.qB φ t ζ x y) := by ring
+        rw [hfac, D.qB_flip_y_sub φ t ζ x y i]
+      rw [if_pos hY, hcoef, hdiff, abs_mul, mul_comm
+        |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| |D.Sc t i x|,
+        mul_assoc]
+      refine mul_le_mul_of_nonneg_left ?_ (abs_nonneg _)
+      rw [pgm, Finset.mul_sum, ← Finset.mul_sum]
+      calc |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| *
+            |∑ ζ : Cube n, D.Hlik t ζ x *
+              ((D.qB φ t ζ x (flipCoord i y) + D.qB φ t ζ x y) *
+                (-2 * D.mB t x y ζ i * dmext φ i (D.mB t x y ζ)))|
+          ≤ |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| *
+            ∑ ζ : Cube n, D.Hlik t ζ x *
+              (2 * (2 * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|)) := by
+            refine mul_le_mul_of_nonneg_left ?_ (abs_nonneg _)
+            refine le_trans (Finset.abs_sum_le_sum_abs _ _) ?_
+            refine Finset.sum_le_sum fun ζ _ => ?_
+            have hH := D.Hlik_nonneg htT.le ζ x
+            rw [abs_mul, abs_of_nonneg hH]
+            refine mul_le_mul_of_nonneg_left ?_ hH
+            have hq1 := hq01 ζ x (flipCoord i y)
+            have hq2 := hq01 ζ x y
+            have hsum2 : |D.qB φ t ζ x (flipCoord i y) + D.qB φ t ζ x y| ≤ 2 := by
+              rw [abs_of_nonneg (by linarith [hq1.1, hq2.1])]
+              linarith [hq1.2, hq2.2]
+            have hmB : |D.mB t x y ζ i| ≤ D.aB t + D.bB t := by
+              have h1 := D.abs_mB_le_one ht x y ζ i
+              have h2 : |D.mB t x y ζ i| ≤ |D.aB t * toR (y i)|
+                  + |D.bB t * toR (x i) * toR (y i) * toR (ζ i)| := by
+                simp only [mB]
+                exact abs_add _ _
+              have e1 : |D.aB t * toR (y i)| = D.aB t := by
+                rw [abs_mul, abs_toR, mul_one, abs_of_nonneg (D.aB_nonneg ht)]
+              have e2 : |D.bB t * toR (x i) * toR (y i) * toR (ζ i)| = D.bB t := by
+                rw [abs_mul, abs_mul, abs_mul, abs_toR, abs_toR, abs_toR,
+                  abs_of_nonneg (D.bB_nonneg ht)]
+                ring
+              rw [e1, e2] at h2
+              exact h2
+            calc |(D.qB φ t ζ x (flipCoord i y) + D.qB φ t ζ x y) *
+                  (-2 * D.mB t x y ζ i * dmext φ i (D.mB t x y ζ))|
+                = |D.qB φ t ζ x (flipCoord i y) + D.qB φ t ζ x y| *
+                  (2 * |D.mB t x y ζ i| * |dmext φ i (D.mB t x y ζ)|) := by
+                  rw [abs_mul, abs_mul, abs_mul]
+                  norm_num
+              _ ≤ 2 * (2 * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|) := by
+                  have hd2 : (0:ℝ) ≤ |dmext φ i (D.mB t x y ζ)| := abs_nonneg _
+                  have hm0 : (0:ℝ) ≤ |D.mB t x y ζ i| := abs_nonneg _
+                  nlinarith [abs_nonneg (D.qB φ t ζ x (flipCoord i y)
+                    + D.qB φ t ζ x y)]
+        _ ≤ ∑ ζ : Cube n, D.Hlik t ζ x *
+              (2 * (2 * |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)
+                  * D.pwt t i x ζ| * (D.aB t + D.bB t)
+                * |dmext φ i (D.mB t x y ζ)|)) := by
+            rw [Finset.mul_sum]
+            refine Finset.sum_le_sum fun ζ _ => ?_
+            have hH := D.Hlik_nonneg htT.le ζ x
+            have hpwt : D.pwt t i x ζ = 1 := by
+              simp only [pwt, if_pos hs]
+            rw [hpwt, mul_one]
+            calc |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| *
+                  (D.Hlik t ζ x * (2 * (2 * (D.aB t + D.bB t)
+                    * |dmext φ i (D.mB t x y ζ)|)))
+                = D.Hlik t ζ x * (2 * (2
+                    * |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)|
+                    * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|)) := by
+                  ring
+              _ ≤ _ := le_of_eq rfl
+        _ = 2 * ∑ ζ : Cube n, D.Hlik t ζ x *
+              (2 * |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.pwt t i x ζ|
+                * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|) := by
+            rw [Finset.mul_sum]
+            refine Finset.sum_congr rfl fun ζ _ => ?_
+            have hpwt : D.pwt t i x ζ = 1 := by
+              simp only [pwt, if_pos hs]
+            rw [hpwt, mul_one]
+            ring
+    · sorry
+  sorry
+
 /-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
 `C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
 `A ⊆ ℰ_θ`,
