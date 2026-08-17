@@ -145,12 +145,149 @@ lemma profile_le_one' (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
       exact (heatAt_pos hf hs x).le
   rwa [unifE_heatAt, hm] at h1
 
+/-- The entropy step of [C eq (entropy_vs_anti_concentration_profile)], stated
+for an abstract strictly positive density `F` of mean one (applied below with
+`F = f_s`). The test function is `φ = ℓ·1_E - log(1+(e^ℓ-1)λ(E))` with
+`E = {log F ∈ (ℓ,ℓ+1]}`, which satisfies `𝔼_λ e^φ = 1`. -/
+private lemma abstract_profile_le_ent {F : Cube n → ℝ} (hFpos : ∀ x, 0 < F x)
+    (hF1 : unifE F = 1) {ℓ : ℝ} (hℓ : 2 ≤ ℓ) :
+    ℓ * unifE (fun x => (Set.Ioc ℓ (ℓ + 1)).indicator (fun _ => F x) (Real.log (F x)))
+      ≤ 2 * entUnif (fun x => F x * cutoff (Real.log (F x) - ℓ) ^ 2) := by
+  classical
+  set g : Cube n → ℝ := fun x => F x * cutoff (Real.log (F x) - ℓ) ^ 2 with hgdef
+  set A : ℝ := unifE (fun x =>
+    (Set.Ioc ℓ (ℓ + 1)).indicator (fun _ => F x) (Real.log (F x))) with hAdef
+  set ind : Cube n → ℝ := fun x =>
+    (Set.Ioc ℓ (ℓ + 1)).indicator (fun _ => (1 : ℝ)) (Real.log (F x)) with hinddef
+  set p : ℝ := unifE ind with hpdef
+  set G : ℝ := unifE g with hGdef
+  -- pointwise facts
+  have hind1 : ∀ x, Real.log (F x) ∈ Set.Ioc ℓ (ℓ + 1) → ind x = 1 := by
+    intro x hx; simp only [hinddef]; exact Set.indicator_of_mem hx _
+  have hind0' : ∀ x, Real.log (F x) ∉ Set.Ioc ℓ (ℓ + 1) → ind x = 0 := by
+    intro x hx; simp only [hinddef]; exact Set.indicator_of_notMem hx _
+  have hgnn : ∀ x, 0 ≤ g x := by
+    intro x; simp only [hgdef]; exact mul_nonneg (hFpos x).le (sq_nonneg _)
+  have hcut1 : ∀ x, cutoff (Real.log (F x) - ℓ) ^ 2 ≤ 1 := by
+    intro x
+    have h := cutoff_mem_Icc (Real.log (F x) - ℓ)
+    nlinarith [h.1, h.2]
+  have hgle : ∀ x, g x ≤ F x := by
+    intro x; simp only [hgdef]
+    exact mul_le_of_le_one_right (hFpos x).le (hcut1 x)
+  have hind0 : ∀ x, 0 ≤ ind x := by
+    intro x; simp only [hinddef]
+    exact Set.indicator_nonneg (fun _ _ => zero_le_one) _
+  -- `g·1_E` is the profile integrand (χ = 1 on the band)
+  have hgind : ∀ x, g x * ind x
+      = (Set.Ioc ℓ (ℓ + 1)).indicator (fun _ => F x) (Real.log (F x)) := by
+    intro x
+    by_cases hx : Real.log (F x) ∈ Set.Ioc ℓ (ℓ + 1)
+    · rw [hind1 x hx, mul_one, Set.indicator_of_mem hx]
+      simp only [hgdef]
+      rw [cutoff_eq_one (by linarith [hx.1]) (by linarith [hx.2]), one_pow, mul_one]
+    · rw [hind0' x hx, mul_zero, Set.indicator_of_notMem hx]
+  -- the four scalar bounds
+  have hA0 : 0 ≤ A := by
+    rw [hAdef]
+    exact unifE_nonneg fun x => Set.indicator_nonneg (fun _ _ => (hFpos x).le) _
+  have hp0 : 0 ≤ p := by rw [hpdef]; exact unifE_nonneg hind0
+  have hG0 : 0 ≤ G := by rw [hGdef]; exact unifE_nonneg hgnn
+  have hG1 : G ≤ 1 := by
+    rw [hGdef, ← hF1]; exact unifE_mono hgle
+  have he1 : (1 : ℝ) ≤ Real.exp ℓ := by
+    rw [← Real.exp_zero]; exact Real.exp_le_exp.mpr (by linarith)
+  have hpA : p ≤ Real.exp (-ℓ) * A := by
+    rw [hpdef, hAdef, ← unifE_smul]
+    refine unifE_mono fun x => ?_
+    by_cases hx : Real.log (F x) ∈ Set.Ioc ℓ (ℓ + 1)
+    · rw [hind1 x hx, Set.indicator_of_mem hx]
+      have hFx : Real.exp ℓ < F x := by
+        have h := Real.exp_lt_exp.mpr hx.1
+        rwa [Real.exp_log (hFpos x)] at h
+      rw [Real.exp_neg, inv_mul_eq_div, le_div_iff₀ (Real.exp_pos ℓ), one_mul]
+      linarith
+    · rw [hind0' x hx, Set.indicator_of_notMem hx, mul_zero]
+  have hee : Real.exp ℓ * Real.exp (-ℓ) = 1 := by
+    rw [← Real.exp_add]; simp
+  have hpA' : (Real.exp ℓ - 1) * p ≤ A := by
+    have h2 : Real.exp ℓ * p ≤ Real.exp ℓ * (Real.exp (-ℓ) * A) :=
+      mul_le_mul_of_nonneg_left hpA (Real.exp_pos ℓ).le
+    have h3 : Real.exp ℓ * (Real.exp (-ℓ) * A) = A := by rw [← mul_assoc, hee, one_mul]
+    nlinarith [hp0]
+  -- the normalizing constant
+  set Q : ℝ := 1 + (Real.exp ℓ - 1) * p with hQdef
+  have hQ1 : (1 : ℝ) ≤ Q := by rw [hQdef]; nlinarith [hp0]
+  have hQ : (0 : ℝ) < Q := by linarith
+  set c : ℝ := Real.log Q with hcdef
+  have hc0 : 0 ≤ c := Real.log_nonneg hQ1
+  have hcA : c ≤ A := le_trans (by
+      have := Real.log_le_sub_one_of_pos hQ
+      rw [hQdef] at this; linarith [this]) hpA'
+  -- the variational bound
+  have hw0 : ∀ _ : Cube n, (0:ℝ) ≤ ((2:ℝ) ^ n)⁻¹ := fun _ => by positivity
+  have hw1 : ∑ _x : Cube n, ((2:ℝ) ^ n)⁻¹ = 1 := by
+    have h := sum_inv_mul_eq_unifE (fun _ : Cube n => (1:ℝ))
+    simpa using h
+  have hexpind : ∀ x, Real.exp (ℓ * ind x) = 1 + (Real.exp ℓ - 1) * ind x := by
+    intro x
+    by_cases hx : Real.log (F x) ∈ Set.Ioc ℓ (ℓ + 1)
+    · rw [hind1 x hx, mul_one, mul_one]; ring
+    · rw [hind0' x hx, mul_zero, mul_zero, Real.exp_zero, add_zero]
+  have hcQ : Real.exp c = Q := Real.exp_log hQ
+  have hφ : ∑ x : Cube n, ((2:ℝ) ^ n)⁻¹ * Real.exp (ℓ * ind x - c) ≤ 1 := by
+    have hstep : ∀ x : Cube n, ((2:ℝ) ^ n)⁻¹ * Real.exp (ℓ * ind x - c)
+        = ((2:ℝ) ^ n)⁻¹ * ((1 + (Real.exp ℓ - 1) * ind x) / Q) := by
+      intro x; rw [Real.exp_sub, hexpind x, hcQ]
+    rw [Finset.sum_congr rfl fun x _ => hstep x]
+    have hdiv : ∀ x : Cube n, ((2:ℝ) ^ n)⁻¹ * ((1 + (Real.exp ℓ - 1) * ind x) / Q)
+        = (((2:ℝ) ^ n)⁻¹ * (1 + (Real.exp ℓ - 1) * ind x)) / Q := by
+      intro x; ring
+    rw [Finset.sum_congr rfl fun x _ => hdiv x, ← Finset.sum_div,
+      sum_inv_mul_eq_unifE]
+    have hu : unifE (fun x => 1 + (Real.exp ℓ - 1) * ind x) = Q := by
+      have h1 := unifE_add (fun _ : Cube n => (1:ℝ)) (fun x => (Real.exp ℓ - 1) * ind x)
+      rw [h1, unifE_const, unifE_smul, hQdef, hpdef]
+    rw [hu, div_self (ne_of_gt hQ)]
+  have hvar := sum_mul_le_ent (fun _ : Cube n => ((2:ℝ) ^ n)⁻¹) g
+    (fun x => ℓ * ind x - c) hw0 hw1 hgnn hφ
+  have hent : ent (fun _ : Cube n => ((2:ℝ) ^ n)⁻¹) g = entUnif g := by
+    rw [ent, entUnif, sum_inv_mul_eq_unifE, sum_inv_mul_eq_unifE]
+  have hlhs : ∑ x : Cube n, ((2:ℝ) ^ n)⁻¹ * (g x * (ℓ * ind x - c)) = ℓ * A - c * G := by
+    rw [sum_inv_mul_eq_unifE]
+    have hre : (fun x => g x * (ℓ * ind x - c))
+        = fun x => ℓ * (g x * ind x) - c * g x := by funext x; ring
+    rw [hre, unifE_sub, unifE_smul, unifE_smul, ← hGdef, hAdef]
+    exact congrArg (fun z => ℓ * z - c * G) (congrArg unifE (funext hgind))
+  rw [hlhs, hent] at hvar
+  have hcG : c * G ≤ A := le_trans (mul_le_of_le_one_right hc0 hG1) hcA
+  nlinarith [hvar, hcG, mul_nonneg (sub_nonneg.mpr hℓ) hA0]
+
+-- STATEMENT-ISSUE: `profile_le_ent` is FALSE as stated (no hypothesis
+-- `0 ≤ s`; for `s < 0` the flow `heatAt f s` takes negative values and the
+-- entropy of the sign-changing `h_s` can be negative while the profile is
+-- `0`).  Falsity witness: `n = 1`, `f 1 = 1.9`, `f (-1) = 0.1`, so
+-- `heatAt f s x = 1 + 0.9·e^{-s}·toR (x 0)`; at `e^{-s} = 37.9` the values are
+-- `F₊ ≈ 35.1` and `F₋ ≈ -33.1`.  With `ℓ = 2` neither `Real.log 35.1 ≈ 3.56`
+-- nor `Real.log 33.1 ≈ 3.50` lies in `(2,3]`, so the profile is `0` and the
+-- left side is `0`; but `h_s = (35.1·χ(1.56)², -33.1·χ(1.50)²)
+-- ≈ (6.0, -8.28)` has `entUnif h_s ≈ -3.2 < 0`.
+-- The intended statement (with `0 ≤ s`) is `profile_le_ent'` below.
 /-- Entropy lower bound [C eq (entropy_vs_anti_concentration_profile)]:
 for `ℓ ≥ 2`, `ℓ·𝔄_s((ℓ,ℓ+1]) ≤ 2·Ent_λ(h_s)`. -/
 lemma profile_le_ent (hf : ∀ x, 0 < f x) (hm : unifE f = 1) (s ℓ : ℝ)
     (hℓ : 2 ≤ ℓ) :
     ℓ * profile f s (Set.Ioc ℓ (ℓ + 1)) ≤ 2 * entUnif (localizedTest f s ℓ) := by
   sorry
+
+/-- Entropy lower bound [C eq (entropy_vs_anti_concentration_profile)] (correct
+form of `profile_le_ent`, with the missing hypothesis `0 ≤ s`): for `ℓ ≥ 2`,
+`ℓ·𝔄_s((ℓ,ℓ+1]) ≤ 2·Ent_λ(h_s)`. -/
+lemma profile_le_ent' (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
+    (hs : 0 ≤ s) (ℓ : ℝ) (hℓ : 2 ≤ ℓ) :
+    ℓ * profile f s (Set.Ioc ℓ (ℓ + 1)) ≤ 2 * entUnif (localizedTest f s ℓ) :=
+  abstract_profile_le_ent (fun x => heatAt_pos hf hs x)
+    (by rw [unifE_heatAt, hm]) hℓ
 
 /-- Coarea comparison [C eq (claim_dirichlet_comparison)] with our constants:
 `𝔼_λ ∑_i (Δ_i √h_s)² ≤ 256·∫_{ℓ-1}^{ℓ+2} levelFlux f s u du`. -/
