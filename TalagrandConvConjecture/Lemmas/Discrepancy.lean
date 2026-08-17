@@ -20,6 +20,84 @@ close the estimate `Y_A ≲ κ_a ℙ(A) + κ_a Λ_a² 𝒮_A` [LGF eq (4.21)].
 
 namespace Talagrand
 
+/-! ### Elementary discrete Cauchy–Schwarz helpers
+
+These are stated over an arbitrary `Finset` so that they can be reused for the
+sums over coordinates `i`, over terminal points `ζ` (with the weights `H^ζ`),
+over the state space, and over starting points. -/
+
+/-- Cauchy–Schwarz for finite sums of reals. -/
+private lemma cs_sq {ι : Type*} (s : Finset ι) (f g : ι → ℝ) :
+    (∑ i ∈ s, f i * g i) ^ 2 ≤ (∑ i ∈ s, f i ^ 2) * ∑ i ∈ s, g i ^ 2 := by
+  have hA : (0 : ℝ) ≤ ∑ i ∈ s, f i ^ 2 := Finset.sum_nonneg fun i _ => sq_nonneg _
+  have key : ∀ lam : ℝ, 0 ≤ lam ^ 2 * (∑ i ∈ s, f i ^ 2)
+      - 2 * lam * (∑ i ∈ s, f i * g i) + ∑ i ∈ s, g i ^ 2 := by
+    intro lam
+    have hnn : (0 : ℝ) ≤ ∑ i ∈ s, (lam * f i - g i) ^ 2 :=
+      Finset.sum_nonneg fun i _ => sq_nonneg _
+    have hpt : ∀ i : ι, (lam * f i - g i) ^ 2
+        = lam ^ 2 * f i ^ 2 - 2 * lam * (f i * g i) + g i ^ 2 := by
+      intro i; ring
+    rw [Finset.sum_congr rfl fun i _ => hpt i, Finset.sum_add_distrib,
+      Finset.sum_sub_distrib, ← Finset.mul_sum, ← Finset.mul_sum] at hnn
+    exact hnn
+  rcases eq_or_lt_of_le hA with h | h
+  · have hf : ∀ i ∈ s, f i = 0 := by
+      intro i hi
+      have h0 := (Finset.sum_eq_zero_iff_of_nonneg
+        (fun j (_ : j ∈ s) => sq_nonneg (f j))).mp h.symm i hi
+      exact sq_eq_zero_iff.mp h0
+    have hC : ∑ i ∈ s, f i * g i = 0 :=
+      Finset.sum_eq_zero fun i hi => by rw [hf i hi, zero_mul]
+    rw [hC, ← h]
+    simp
+  · have hA' : (∑ i ∈ s, f i ^ 2) ≠ 0 := ne_of_gt h
+    have hk := key ((∑ i ∈ s, f i * g i) / (∑ i ∈ s, f i ^ 2))
+    have hre : ((∑ i ∈ s, f i * g i) / (∑ i ∈ s, f i ^ 2)) ^ 2 * (∑ i ∈ s, f i ^ 2)
+        - 2 * ((∑ i ∈ s, f i * g i) / (∑ i ∈ s, f i ^ 2)) * (∑ i ∈ s, f i * g i)
+        + ∑ i ∈ s, g i ^ 2
+        = (∑ i ∈ s, g i ^ 2) - (∑ i ∈ s, f i * g i) ^ 2 / (∑ i ∈ s, f i ^ 2) := by
+      field_simp
+      ring
+    rw [hre] at hk
+    have hdiv : (∑ i ∈ s, f i * g i) ^ 2 / (∑ i ∈ s, f i ^ 2) ≤ ∑ i ∈ s, g i ^ 2 := by
+      linarith
+    calc (∑ i ∈ s, f i * g i) ^ 2
+        = (∑ i ∈ s, f i * g i) ^ 2 / (∑ i ∈ s, f i ^ 2) * (∑ i ∈ s, f i ^ 2) := by
+          field_simp
+      _ ≤ (∑ i ∈ s, g i ^ 2) * (∑ i ∈ s, f i ^ 2) :=
+          mul_le_mul_of_nonneg_right hdiv h.le
+      _ = (∑ i ∈ s, f i ^ 2) * ∑ i ∈ s, g i ^ 2 := by ring
+
+/-- Cauchy–Schwarz in square-root form, for nonnegative summands. -/
+private lemma sum_le_sqrt_mul_sqrt {ι : Type*} (s : Finset ι) (f g : ι → ℝ)
+    (hf : ∀ i ∈ s, 0 ≤ f i) (hg : ∀ i ∈ s, 0 ≤ g i) :
+    ∑ i ∈ s, f i * g i
+      ≤ Real.sqrt (∑ i ∈ s, f i ^ 2) * Real.sqrt (∑ i ∈ s, g i ^ 2) := by
+  have hA : (0 : ℝ) ≤ ∑ i ∈ s, f i ^ 2 := Finset.sum_nonneg fun i _ => sq_nonneg _
+  have hC : (0 : ℝ) ≤ ∑ i ∈ s, f i * g i :=
+    Finset.sum_nonneg fun i hi => mul_nonneg (hf i hi) (hg i hi)
+  calc ∑ i ∈ s, f i * g i = Real.sqrt ((∑ i ∈ s, f i * g i) ^ 2) :=
+        (Real.sqrt_sq hC).symm
+    _ ≤ Real.sqrt ((∑ i ∈ s, f i ^ 2) * ∑ i ∈ s, g i ^ 2) :=
+        Real.sqrt_le_sqrt (cs_sq s f g)
+    _ = Real.sqrt (∑ i ∈ s, f i ^ 2) * Real.sqrt (∑ i ∈ s, g i ^ 2) :=
+        Real.sqrt_mul hA _
+
+/-- Jensen/Cauchy–Schwarz against a nonnegative weight:
+`(∑ p f)² ≤ (∑ p)(∑ p f²)`. -/
+private lemma sq_weighted_le {ι : Type*} (s : Finset ι) (p f : ι → ℝ)
+    (hp : ∀ i ∈ s, 0 ≤ p i) :
+    (∑ i ∈ s, p i * f i) ^ 2 ≤ (∑ i ∈ s, p i) * ∑ i ∈ s, p i * f i ^ 2 := by
+  have h := cs_sq s (fun i => Real.sqrt (p i)) (fun i => Real.sqrt (p i) * f i)
+  have e1 : ∀ i ∈ s, Real.sqrt (p i) * (Real.sqrt (p i) * f i) = p i * f i := by
+    intro i hi; rw [← mul_assoc, Real.mul_self_sqrt (hp i hi)]
+  have e2 : ∀ i ∈ s, Real.sqrt (p i) ^ 2 = p i := fun i hi => Real.sq_sqrt (hp i hi)
+  have e3 : ∀ i ∈ s, (Real.sqrt (p i) * f i) ^ 2 = p i * f i ^ 2 := by
+    intro i hi; rw [mul_pow, Real.sq_sqrt (hp i hi)]
+  rw [Finset.sum_congr rfl e1, Finset.sum_congr rfl e2, Finset.sum_congr rfl e3] at h
+  exact h
+
 namespace Dat
 
 variable {n : ℕ} (D : Dat n)
