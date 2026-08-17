@@ -25,6 +25,125 @@ For `ℓ < C·K_a²` the trivial bound `𝔄 ≤ 1 ≤ K_a√C/√ℓ` applies.
 
 namespace Talagrand
 
+/-! ### Elementary sum and analytic bounds used in the proof of [LGF Prop 3.2] -/
+
+/-- `∑_{j<m} (j+1)^{-1/2} ≤ 2√m`. -/
+private lemma sum_inv_sqrt_le (m : ℕ) :
+    ∑ j ∈ Finset.range m, (Real.sqrt ((j : ℝ) + 1))⁻¹ ≤ 2 * Real.sqrt m := by
+  induction m with
+  | zero => simp
+  | succ k ih =>
+    rw [Finset.sum_range_succ]
+    have hk1 : (0 : ℝ) < Real.sqrt ((k : ℝ) + 1) :=
+      Real.sqrt_pos.mpr (by positivity)
+    have hsq : Real.sqrt ((k : ℝ) + 1) * Real.sqrt ((k : ℝ) + 1) = (k : ℝ) + 1 :=
+      Real.mul_self_sqrt (by positivity)
+    have hmul : Real.sqrt (k : ℝ) * Real.sqrt ((k : ℝ) + 1) ≤ (k : ℝ) + 1 / 2 := by
+      rw [← Real.sqrt_mul (by positivity)]
+      calc Real.sqrt ((k : ℝ) * ((k : ℝ) + 1))
+          ≤ Real.sqrt (((k : ℝ) + 1 / 2) ^ 2) := Real.sqrt_le_sqrt (by nlinarith)
+        _ = (k : ℝ) + 1 / 2 := Real.sqrt_sq (by positivity)
+    have h2 : 1 ≤ (2 * Real.sqrt ((k : ℝ) + 1) - 2 * Real.sqrt (k : ℝ))
+        * Real.sqrt ((k : ℝ) + 1) := by nlinarith
+    have key : (Real.sqrt ((k : ℝ) + 1))⁻¹
+        ≤ 2 * Real.sqrt ((k : ℝ) + 1) - 2 * Real.sqrt (k : ℝ) := by
+      calc (Real.sqrt ((k : ℝ) + 1))⁻¹
+          = 1 * (Real.sqrt ((k : ℝ) + 1))⁻¹ := (one_mul _).symm
+        _ ≤ ((2 * Real.sqrt ((k : ℝ) + 1) - 2 * Real.sqrt (k : ℝ))
+              * Real.sqrt ((k : ℝ) + 1)) * (Real.sqrt ((k : ℝ) + 1))⁻¹ :=
+            mul_le_mul_of_nonneg_right h2 (by positivity)
+        _ = 2 * Real.sqrt ((k : ℝ) + 1) - 2 * Real.sqrt (k : ℝ) := by
+            field_simp
+    have hcast : ((k + 1 : ℕ) : ℝ) = (k : ℝ) + 1 := by push_cast; ring
+    rw [hcast]
+    linarith
+
+/-- Harmonic-sum bound, real form. -/
+private lemma sum_inv_le_one_add_log (m : ℕ) :
+    ∑ j ∈ Finset.range m, ((j : ℝ) + 1)⁻¹ ≤ 1 + Real.log m := by
+  have h := harmonic_le_one_add_log m
+  rw [harmonic] at h
+  push_cast at h
+  exact h
+
+private lemma log_le_two_mul_sqrt {x : ℝ} (hx : 0 < x) :
+    Real.log x ≤ 2 * Real.sqrt x := by
+  have hs : 0 < Real.sqrt x := Real.sqrt_pos.mpr hx
+  have h1 : Real.log (Real.sqrt x) ≤ Real.sqrt x - 1 :=
+    Real.log_le_sub_one_of_pos hs
+  have h2 : Real.log (Real.sqrt x) = Real.log x / 2 := Real.log_sqrt hx.le
+  linarith
+
+private lemma log_le_four_mul_sqrt_sqrt {x : ℝ} (hx : 0 < x) :
+    Real.log x ≤ 4 * Real.sqrt (Real.sqrt x) := by
+  have h1 := log_le_two_mul_sqrt (Real.sqrt_pos.mpr hx)
+  have h2 : Real.log (Real.sqrt x) = Real.log x / 2 := Real.log_sqrt hx.le
+  linarith
+
+/-- `κ_a·Λ_a ≤ K_a` (from `K² = κ³Λ` and `Λ ≤ κ`). -/
+private lemma kappa_mul_Lam_le {κ Λ K : ℝ} (hκ : 1 < κ) (hΛ1 : 1 ≤ Λ)
+    (hΛκ : Λ ≤ κ) (hK : K ^ 2 = κ ^ 3 * Λ) (hK0 : 0 ≤ K) : κ * Λ ≤ K := by
+  have hκ0 : (0 : ℝ) < κ := by linarith
+  have hΛ0 : (0 : ℝ) < Λ := by linarith
+  have h1 : (κ * Λ) ^ 2 ≤ K ^ 2 := by
+    rw [hK]
+    nlinarith [mul_nonneg (mul_nonneg (mul_pos hκ0 hκ0).le hΛ0.le)
+      (sub_nonneg.mpr hΛκ)]
+  have h2 := Real.sqrt_le_sqrt h1
+  rwa [Real.sqrt_sq (by positivity), Real.sqrt_sq hK0] at h2
+
+/-- The absorption inequality of [LGF eq (3.12)]:
+`κ²Λ·(1 + log ℓ) ≤ 5·K·√ℓ` whenever `ℓ ≥ K²` and `ℓ ≥ 1`. -/
+private lemma kappa_sq_Lam_log_le {κ Λ K ℓ : ℝ} (hκ : 1 < κ) (hΛ1 : 1 ≤ Λ)
+    (hΛκ : Λ ≤ κ) (hK : K ^ 2 = κ ^ 3 * Λ) (hK1 : 1 ≤ K) (hℓ : K ^ 2 ≤ ℓ)
+    (hℓ1 : 1 ≤ ℓ) : κ ^ 2 * Λ * (1 + Real.log ℓ) ≤ 5 * K * Real.sqrt ℓ := by
+  have hℓ0 : (0 : ℝ) < ℓ := by linarith
+  have hK0 : (0 : ℝ) ≤ K := by linarith
+  have hκ0 : (0 : ℝ) < κ := by linarith
+  have hΛ0 : (0 : ℝ) < Λ := by linarith
+  have hkl : κ * Λ ≤ K := kappa_mul_Lam_le hκ hΛ1 hΛκ hK hK0
+  -- `(κ²Λ)² ≤ K³`
+  have hcube : (κ ^ 2 * Λ) ^ 2 ≤ K ^ 3 := by
+    have h1 : (κ ^ 2 * Λ) ^ 2 = (κ * Λ) * (κ ^ 3 * Λ) := by ring
+    have h2 : K ^ 3 = K * (κ ^ 3 * Λ) := by rw [← hK]; ring
+    rw [h1, h2]
+    exact mul_le_mul_of_nonneg_right hkl (by positivity)
+  have hsqrtK : Real.sqrt (K ^ 3) = K * Real.sqrt K := by
+    rw [show K ^ 3 = K ^ 2 * K by ring, Real.sqrt_mul (by positivity),
+      Real.sqrt_sq hK0]
+  have hmain : κ ^ 2 * Λ ≤ K * Real.sqrt K := by
+    rw [← hsqrtK]
+    calc κ ^ 2 * Λ = Real.sqrt ((κ ^ 2 * Λ) ^ 2) :=
+          (Real.sqrt_sq (by positivity)).symm
+      _ ≤ Real.sqrt (K ^ 3) := Real.sqrt_le_sqrt hcube
+  -- `1 + log ℓ ≤ 5·ℓ^{1/4}`
+  have hq1 : (1 : ℝ) ≤ Real.sqrt (Real.sqrt ℓ) := by
+    have : (1 : ℝ) ≤ Real.sqrt ℓ := by
+      rw [show (1:ℝ) = Real.sqrt 1 by simp]
+      exact Real.sqrt_le_sqrt hℓ1
+    rw [show (1:ℝ) = Real.sqrt 1 by simp]
+    exact Real.sqrt_le_sqrt (by simpa using this)
+  have hlog : 1 + Real.log ℓ ≤ 5 * Real.sqrt (Real.sqrt ℓ) := by
+    have := log_le_four_mul_sqrt_sqrt hℓ0
+    linarith
+  -- `√K ≤ ℓ^{1/4}`
+  have hKle : K ≤ Real.sqrt ℓ := by
+    rw [show K = Real.sqrt (K ^ 2) from (Real.sqrt_sq hK0).symm]
+    exact Real.sqrt_le_sqrt hℓ
+  have hsK : Real.sqrt K ≤ Real.sqrt (Real.sqrt ℓ) := Real.sqrt_le_sqrt hKle
+  have hqq : Real.sqrt (Real.sqrt ℓ) * Real.sqrt (Real.sqrt ℓ) = Real.sqrt ℓ :=
+    Real.mul_self_sqrt (Real.sqrt_nonneg _)
+  have hsK0 : (0 : ℝ) ≤ Real.sqrt K := Real.sqrt_nonneg _
+  have hlog0 : (0 : ℝ) ≤ Real.log ℓ := Real.log_nonneg hℓ1
+  calc κ ^ 2 * Λ * (1 + Real.log ℓ)
+      ≤ (K * Real.sqrt K) * (5 * Real.sqrt (Real.sqrt ℓ)) := by
+        exact mul_le_mul hmain hlog (by linarith) (by positivity)
+    _ ≤ (K * Real.sqrt (Real.sqrt ℓ)) * (5 * Real.sqrt (Real.sqrt ℓ)) := by
+        apply mul_le_mul_of_nonneg_right _ (by positivity)
+        exact mul_le_mul_of_nonneg_left hsK hK0
+    _ = 5 * K * (Real.sqrt (Real.sqrt ℓ) * Real.sqrt (Real.sqrt ℓ)) := by ring
+    _ = 5 * K * Real.sqrt ℓ := by rw [hqq]
+
 namespace Dat
 
 variable {n : ℕ} (D : Dat n)
