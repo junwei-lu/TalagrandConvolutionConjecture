@@ -35,10 +35,7 @@ lemma biasedConv_eq_heatAt {a : ℝ} (ha : 0 < a) (f : Cube n → ℝ) :
 
 /-! ### Elementary auxiliaries -/
 
-/-- The biased weights form a probability vector, `∑_y μ_a({y}) = 1`. -/
-private lemma sum_biasedWeight (ρ : ℝ) : ∑ y : Cube n, biasedWeight ρ y = 1 := by
-  have h := sum_cubeKernel (n := n) (fun _ => ρ)
-  simpa [cubeKernel, biasedWeight] using h
+-- (`sum_biasedWeight` is provided by `Cube/Heat.lean`)
 
 /-- `𝔼_λ` commutes with finite sums. -/
 private lemma unifE_sum {ι : Type*} (s : Finset ι) (F : ι → Cube n → ℝ) :
