@@ -1714,7 +1714,6 @@ private lemma abs_sum_Dtest_le (B : Finset (Cube n)) {ℓ θ : ℝ}
   have hSA : (∑ x₀ ∈ A, D.startW θ x₀ *
         (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))) = D.SA Φ A := by
     refine Finset.sum_congr rfl fun x₀ _ => ?_
-    simp only [SA]
     ring
   calc |∑ x₀ ∈ A, D.startW θ x₀ * D.DtestF (Φ x₀) B|
       ≤ Cst * ∑ x₀ ∈ A, D.startW θ x₀ *
@@ -2068,7 +2067,7 @@ private lemma abs_pertQ_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
               have h2 : |D.mB t x y ζ i| ≤ |D.aB t * toR (y i)|
                   + |D.bB t * toR (x i) * toR (y i) * toR (ζ i)| := by
                 simp only [mB]
-                exact abs_add _ _
+                exact abs_add_le _ _
               have e1 : |D.aB t * toR (y i)| = D.aB t := by
                 rw [abs_mul, abs_toR, mul_one, abs_of_nonneg (D.aB_nonneg ht)]
               have e2 : |D.bB t * toR (x i) * toR (y i) * toR (ζ i)| = D.bB t := by
@@ -2085,9 +2084,15 @@ private lemma abs_pertQ_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
                   norm_num
               _ ≤ 2 * (2 * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|) := by
                   have hd2 : (0:ℝ) ≤ |dmext φ i (D.mB t x y ζ)| := abs_nonneg _
-                  have hm0 : (0:ℝ) ≤ |D.mB t x y ζ i| := abs_nonneg _
-                  nlinarith [abs_nonneg (D.qB φ t ζ x (flipCoord i y)
-                    + D.qB φ t ζ x y)]
+                  have s1 : |D.qB φ t ζ x (flipCoord i y) + D.qB φ t ζ x y| *
+                        (2 * |D.mB t x y ζ i| * |dmext φ i (D.mB t x y ζ)|)
+                      ≤ 2 * (2 * |D.mB t x y ζ i|
+                        * |dmext φ i (D.mB t x y ζ)|) :=
+                    mul_le_mul_of_nonneg_right hsum2 (by positivity)
+                  have s2 : |D.mB t x y ζ i| * |dmext φ i (D.mB t x y ζ)|
+                      ≤ (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)| :=
+                    mul_le_mul_of_nonneg_right hmB hd2
+                  linarith
         _ ≤ ∑ ζ : Cube n, D.Hlik t ζ x *
               (2 * (2 * |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)
                   * D.pwt t i x ζ| * (D.aB t + D.bB t)
@@ -2203,10 +2208,21 @@ private lemma abs_pertQ_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
                 norm_num
             _ ≤ 2 * (2 * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|) := by
                 have hd2 : (0:ℝ) ≤ |dmext φ i (D.mB t x y ζ)| := abs_nonneg _
-                have hm0 : (0:ℝ) ≤ |D.aB t * toR (y i)
-                    - D.bB t * toR (x i) * toR (y i) * toR (ζ i)| := abs_nonneg _
-                nlinarith [abs_nonneg (D.qB φ t ζ (flipCoord i x) (flipCoord i y)
-                  + D.qB φ t ζ (flipCoord i x) y)]
+                have s1 : |D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                      + D.qB φ t ζ (flipCoord i x) y| *
+                      (2 * |D.aB t * toR (y i)
+                          - D.bB t * toR (x i) * toR (y i) * toR (ζ i)|
+                        * |dmext φ i (D.mB t x y ζ)|)
+                    ≤ 2 * (2 * |D.aB t * toR (y i)
+                        - D.bB t * toR (x i) * toR (y i) * toR (ζ i)|
+                      * |dmext φ i (D.mB t x y ζ)|) :=
+                  mul_le_mul_of_nonneg_right hsum2 (by positivity)
+                have s2 : |D.aB t * toR (y i)
+                      - D.bB t * toR (x i) * toR (y i) * toR (ζ i)|
+                      * |dmext φ i (D.mB t x y ζ)|
+                    ≤ (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)| :=
+                  mul_le_mul_of_nonneg_right hpc hd2
+                linarith
         calc |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| *
               |∑ ζ : Cube n, D.Hlik t ζ x * (D.pwt t i x ζ *
                 ((D.qB φ t ζ (flipCoord i x) (flipCoord i y)
@@ -2591,20 +2607,22 @@ private lemma apE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
   have hend : D.qPair φ c (c.K - 1) (c.z c.K) ≤ 1 := by
     have hk : c.K - 1 < c.K := Nat.sub_lt hK Nat.one_pos
     have hsucc : c.K - 1 + 1 = c.K := Nat.succ_pred_eq_of_pos hK
+    have hz : c.z (c.K - 1) ≤ c.z c.K := by
+      have h := hmono (c.K - 1) hk
+      rwa [hsucc] at h
     have hmem : c.z c.K ∈ Set.Icc (c.z (c.K - 1)) (c.z (c.K - 1 + 1)) := by
       rw [hsucc]
-      exact ⟨hmono _ hk ▸ (by rw [← hsucc]; exact hmono _ hk), le_rfl⟩
-    have hobsT : c.z c.K = obsT := c.is.grid.last
+      exact ⟨hz, le_rfl⟩
+    have hobsT : c.z c.K ≤ obsT := le_of_eq c.is.grid.last
     calc D.qPair φ c (c.K - 1) (c.z c.K)
         ≤ ∑ s : JSt n, c.π (c.K - 1) (c.z c.K) s * 1 := by
           refine Finset.sum_le_sum fun s _ => ?_
           refine mul_le_mul_of_nonneg_left ?_ ?_
-          · have := D.Qtest_mem01 hφ01 (t := c.z c.K) (by rw [hobsT]) s.1 s.2.1
-            exact this.2
-          · exact D.cflow_nonneg hθ c hk (by rw [hsucc]; exact hmem) s
+          · exact (D.Qtest_mem01 hφ01 hobsT s.1 s.2.1).2
+          · exact D.cflow_nonneg hθ c hk hmem s
       _ = 1 := by
           simp only [mul_one]
-          exact D.cflow_mass hθ c hk (by rw [hsucc]; exact hmem)
+          exact D.cflow_mass hθ c hk hmem
   have hstart : 0 ≤ D.qPair φ c 0 (c.z 0) := by
     have h0K : 0 < c.K := hK
     have hmem : c.z 0 ∈ Set.Icc (c.z 0) (c.z 1) := ⟨le_rfl, hmono 0 h0K⟩
@@ -2810,10 +2828,6 @@ private lemma apE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
           * D.dbar ℓ θ x₀ * (Real.sqrt (D.scoreEnergy c)
             * Real.sqrt (D.gamE φ c))) := by rw [hCst]
 
-/-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
-`C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
-`A ⊆ ℰ_θ`,
-`D_A ≤ C(κ_a Λ_a √(𝒮_A·ℙ(A)) + κ_a Λ_a² 𝒮_A)`. -/
 /-- The `b_t²`-energy of a flow. -/
 private noncomputable def bpE (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
     (c : D.CFlow ℓ θ x₀) : ℝ :=
@@ -2834,7 +2848,7 @@ private lemma continuousOn_bpInt (φ : Cube n → ℝ) {a b : ℝ} (hb : b ≤ o
 /-- Splitting the `Γ`-energy into its `a²`- and `b²`-parts. -/
 private lemma gamE_eq (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
     (c : D.CFlow ℓ θ x₀) : D.gamE φ c = D.apE φ c + D.bpE φ c := by
-  simp only [gamE, apE, bpE, ← Finset.sum_add_distrib]
+  simp only [gamE, apE, bpE, apPair, ← Finset.sum_add_distrib]
   refine Finset.sum_congr rfl fun k hk => ?_
   have hk' : k < c.K := Finset.mem_range.mp hk
   have hzk : c.z k ≤ c.z (k + 1) := c.is.grid.mono k hk'
@@ -3024,7 +3038,6 @@ theorem DA_le :
         have hSAeq : (∑ x₀ ∈ A, D.startW θ x₀ *
             (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))) = D.SA Φ A := by
           refine Finset.sum_congr rfl fun x₀ _ => ?_
-          simp only [SA]
           ring
         rw [hSAeq] at hcs
         exact hcs
