@@ -205,31 +205,12 @@ theorem finite_setOf_expPoly_family_eq_of_pos {J : Type*} [Fintype J] {N : ℕ} 
   rw [hev]
   linarith
 
--- STATEMENT-ISSUE: `finite_setOf_expPoly_family_eq` below is FALSE as stated
--- when `N = 0`: the sum over `Finset.range 0` is `0`, so the set is
--- `{t | ∃ j, (0 : ℝ) = v j}`, i.e. `∅` or `Set.univ`, and `hv` (which only
--- says `v j ≠ c j 0`) does not exclude `v j = 0`.
--- Falsity witness: `J := Unit`, `N := 0`, `c := fun _ _ => 1`, `v := fun _ => 0`.
--- Then `hv` holds (`0 ≠ 1`) but the set is `Set.univ`, which is infinite.
--- The statement was left unchanged (per the project rules); the `sorry` below
--- is confined to the `N = 0` branch. Every intended use has `N ≥ 1` (the
--- "constant term" `c j 0` must actually be a coefficient of the polynomial):
--- use `finite_setOf_expPoly_family_eq_of_pos`, which is complete.
-/-- A finite family of exponential-polynomial level conditions has finitely
-many crossing times on `ℝ`: if each `g j t = ∑_k c j k · (e^{-t})^k` is a
-polynomial in `e^{-t}` whose value `v j` differs from its limit
-`c j 0 = g j (+∞)`, then `{t | ∃ j, g j t = v j}` is finite. Convenience
-wrapper around `finite_setOf_poly_exp_eq`.
-
-Deviation from the intended statement: as stated this needs `0 < N` (see the
-STATEMENT-ISSUE note above); the `N = 0` branch is an open `sorry`, and
-`finite_setOf_expPoly_family_eq_of_pos` is the complete version. -/
-theorem finite_setOf_expPoly_family_eq {J : Type*} [Fintype J] {N : ℕ}
-    (c : J → ℕ → ℝ) (v : J → ℝ) (hv : ∀ j, v j ≠ c j 0) :
-    {t : ℝ | ∃ j, ∑ k ∈ Finset.range N, c j k * Real.exp (-t) ^ k = v j}.Finite := by
-  rcases Nat.eq_zero_or_pos N with hN | hN
-  · -- FALSE for `N = 0`; see the STATEMENT-ISSUE note above.
-    sorry
-  · exact finite_setOf_expPoly_family_eq_of_pos hN c v hv
+-- STATEMENT REPAIR (laptop adjudication of the lane's STATEMENT-ISSUE): the
+-- original `finite_setOf_expPoly_family_eq`, stated without `0 < N`, is FALSE
+-- at `N = 0` — witness `J := Unit`, `N := 0`, `c := fun _ _ => 1`,
+-- `v := fun _ => 0`: the empty sum is `0`, so the set is `Set.univ`, infinite,
+-- while `hv` (`0 ≠ 1`) holds. The refuted form has been deleted; every
+-- intended use has `N ≥ 1`, so consumers must supply `0 < N` and use
+-- `finite_setOf_expPoly_family_eq_of_pos` above.
 
 end Talagrand
