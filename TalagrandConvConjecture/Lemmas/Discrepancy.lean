@@ -2814,6 +2814,136 @@ private lemma apE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
 `C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
 `A ⊆ ℰ_θ`,
 `D_A ≤ C(κ_a Λ_a √(𝒮_A·ℙ(A)) + κ_a Λ_a² 𝒮_A)`. -/
+/-- The `b_t²`-energy of a flow. -/
+private noncomputable def bpE (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) : ℝ :=
+  ∑ k ∈ Finset.range c.K, ∫ t in c.z k..c.z (k + 1),
+    ∑ s : JSt n, c.π k t s * D.bpInt φ t s.1 s.2.1
+
+private lemma continuousOn_bpInt (φ : Cube n → ℝ) {a b : ℝ} (hb : b ≤ obsT)
+    (hbT : b < D.T) (x y : Cube n) :
+    ContinuousOn (fun t => D.bpInt φ t x y) (Set.Icc a b) := by
+  simp only [bpInt]
+  refine continuousOn_finset_sum _ fun ζ _ => ContinuousOn.mul
+    (D.continuousOn_Hlik' hbT ζ x) ?_
+  refine continuousOn_finset_sum _ fun i _ => ?_
+  exact ((D.continuousOn_lam' hb i x ζ).mul
+      ((D.continuousOn_bB' hb).pow 2)).mul
+    ((D.continuousOn_dmext_mB' hb φ i x y ζ).pow 2)
+
+/-- Splitting the `Γ`-energy into its `a²`- and `b²`-parts. -/
+private lemma gamE_eq (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) : D.gamE φ c = D.apE φ c + D.bpE φ c := by
+  simp only [gamE, apE, bpE, ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun k hk => ?_
+  have hk' : k < c.K := Finset.mem_range.mp hk
+  have hzk : c.z k ≤ c.z (k + 1) := c.is.grid.mono k hk'
+  have hb : c.z (k + 1) ≤ obsT := D.cell_le_obsT c hk'
+  have hbT : c.z (k + 1) < D.T := lt_of_le_of_lt hb D.obsT_lt_T
+  have hapi : IntervalIntegrable (fun t => ∑ s : JSt n, c.π k t s *
+      D.apInt φ t s.1 s.2.1) MeasureTheory.volume (c.z k) (c.z (k + 1)) := by
+    refine ContinuousOn.intervalIntegrable ?_
+    rw [Set.uIcc_of_le hzk]
+    exact continuousOn_finset_sum _ fun s _ =>
+      ((c.is.glued.flow k hk').cont s).mul
+        (D.continuousOn_apInt φ hb hbT s.1 s.2.1)
+  have hbpi : IntervalIntegrable (fun t => ∑ s : JSt n, c.π k t s *
+      D.bpInt φ t s.1 s.2.1) MeasureTheory.volume (c.z k) (c.z (k + 1)) := by
+    refine ContinuousOn.intervalIntegrable ?_
+    rw [Set.uIcc_of_le hzk]
+    exact continuousOn_finset_sum _ fun s _ =>
+      ((c.is.glued.flow k hk').cont s).mul
+        (D.continuousOn_bpInt φ hb hbT s.1 s.2.1)
+  rw [← intervalIntegral.integral_add hapi hbpi]
+  refine intervalIntegral.integral_congr fun t ht => ?_
+  rw [← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun sJ _ => ?_
+  rw [← mul_add, ← D.Gam_eq_ap_add_bp φ t sJ.1 sJ.2.1]
+
+/-- The `b²`-energy is at most `κ/4` [LGF eq (4.19)]. -/
+private lemma bpE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
+    (hθ1 : obsT - 1 ≤ θ) (hθ : θ ≤ obsT) {x₀ : Cube n} (c : D.CFlow ℓ θ x₀) :
+    D.bpE (fun w => if w ∈ B then (1 : ℝ) else 0) c ≤ kappa D.a / 4 := by
+  classical
+  set φ : Cube n → ℝ := fun w => if w ∈ B then (1 : ℝ) else 0 with hφdef
+  have hφ01 : ∀ w, φ w = 0 ∨ φ w = 1 := by
+    intro w; by_cases hw : w ∈ B <;> simp [hφdef, hw]
+  have hk4 : (0 : ℝ) ≤ kappa D.a / 4 := by
+    have := one_lt_kappa D.ha0 D.ha1; linarith
+  have hmono : ∀ k, k < c.K → c.z k ≤ c.z (k + 1) := c.is.grid.mono
+  have hcell : ∀ k, k < c.K →
+      (∫ t in c.z k..c.z (k + 1), ∑ s : JSt n, c.π k t s *
+          D.bpInt φ t s.1 s.2.1)
+        ≤ kappa D.a / 4 * (c.z (k + 1) - c.z k) := by
+    intro k hk
+    have hzk := hmono k hk
+    have hb : c.z (k + 1) ≤ obsT := D.cell_le_obsT c hk
+    have hbT : c.z (k + 1) < D.T := lt_of_le_of_lt hb D.obsT_lt_T
+    have hint : IntervalIntegrable (fun t => ∑ s : JSt n, c.π k t s *
+        D.bpInt φ t s.1 s.2.1) MeasureTheory.volume (c.z k) (c.z (k + 1)) := by
+      refine ContinuousOn.intervalIntegrable ?_
+      rw [Set.uIcc_of_le hzk]
+      exact continuousOn_finset_sum _ fun s _ =>
+        ((c.is.glued.flow k hk).cont s).mul
+          (D.continuousOn_bpInt φ hb hbT s.1 s.2.1)
+    have hptw : ∀ t ∈ Set.Icc (c.z k) (c.z (k + 1)),
+        (∑ s : JSt n, c.π k t s * D.bpInt φ t s.1 s.2.1) ≤ kappa D.a / 4 := by
+      intro t ht
+      have htB : t ≤ obsT := le_trans ht.2 hb
+      have htθ : θ ≤ t := by
+        have h0 := D.grid_le'' c k 0 (Nat.zero_le k) hk.le
+        rw [c.is.grid.first] at h0
+        exact le_trans h0 ht.1
+      have hbp : ∀ s : JSt n, D.bpInt φ t s.1 s.2.1 ≤ kappa D.a / 4 := by
+        intro s
+        have h := D.bpart_Gam_le (ℓ := ℓ) (θ := θ) htθ htB hφ01
+          (x := s.1) (y := s.2.1) (le_trans htB D.obsT_lt_T.le)
+        simpa only [bpInt] using h
+      calc ∑ s : JSt n, c.π k t s * D.bpInt φ t s.1 s.2.1
+          ≤ ∑ s : JSt n, c.π k t s * (kappa D.a / 4) := by
+            refine Finset.sum_le_sum fun s _ => ?_
+            exact mul_le_mul_of_nonneg_left (hbp s)
+              (D.cflow_nonneg hθ c hk ht s)
+        _ = kappa D.a / 4 := by
+            rw [← Finset.sum_mul, D.cflow_mass hθ c hk ht, one_mul]
+    calc (∫ t in c.z k..c.z (k + 1), ∑ s : JSt n, c.π k t s *
+          D.bpInt φ t s.1 s.2.1)
+        ≤ ∫ _t in c.z k..c.z (k + 1), kappa D.a / 4 :=
+          intervalIntegral.integral_mono_on hzk hint
+            intervalIntegrable_const hptw
+      _ = kappa D.a / 4 * (c.z (k + 1) - c.z k) := by
+          rw [intervalIntegral.integral_const, smul_eq_mul]
+          ring
+  calc D.bpE φ c
+      ≤ ∑ k ∈ Finset.range c.K, kappa D.a / 4 * (c.z (k + 1) - c.z k) :=
+        Finset.sum_le_sum fun k hk => hcell k (Finset.mem_range.mp hk)
+    _ = kappa D.a / 4 * (c.z c.K - c.z 0) := by
+        rw [← Finset.mul_sum, Finset.sum_range_sub (fun k => c.z k)]
+    _ ≤ kappa D.a / 4 := by
+        have h1 : c.z c.K = obsT := c.is.grid.last
+        have h2 : c.z 0 = θ := c.is.grid.first
+        rw [h1, h2]
+        nlinarith [hk4]
+
+/-- Per-flow closure: `gamE ≤ κ + Cst·δ̄·√scoreE·√gamE` [LGF eq (4.21)]. -/
+private lemma gamE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
+    (hθ0' : 0 ≤ θ) (hθ1 : obsT - 1 ≤ θ) (hθ : θ ≤ obsT) {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) :
+    D.gamE (fun w => if w ∈ B then (1 : ℝ) else 0) c
+      ≤ kappa D.a + Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a
+          * D.dbar ℓ θ x₀ * (Real.sqrt (D.scoreEnergy c)
+            * Real.sqrt (D.gamE (fun w => if w ∈ B then (1 : ℝ) else 0) c)) := by
+  have hap := D.apE_le B hθ0' hθ1 hθ c
+  have hbp := D.bpE_le B hθ1 hθ c
+  have hsplit := D.gamE_eq (fun w => if w ∈ B then (1 : ℝ) else 0) c
+  have hκ := one_lt_kappa D.ha0 D.ha1
+  -- `1/2 + κ/4 ≤ κ` for `κ > 1`
+  nlinarith [hap, hbp, hsplit]
+
+/-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
+`C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
+`A ⊆ ℰ_θ`,
+`D_A ≤ C(κ_a Λ_a √(𝒮_A·ℙ(A)) + κ_a Λ_a² 𝒮_A)`. -/
 theorem DA_le :
     ∃ C : ℝ, 0 < C ∧ ∀ {n : ℕ} (D : Dat n) (ℓ θ : ℝ), 0 < ℓ →
       obsT - 1 ≤ θ → θ ≤ obsT → ∀ (Φ : D.CFlowFamily ℓ θ)
@@ -2821,7 +2951,166 @@ theorem DA_le :
       D.DA Φ A ≤ C * (kappa D.a * Lam D.a
           * Real.sqrt (D.SA Φ A * D.probA θ A)
         + kappa D.a * Lam D.a ^ 2 * D.SA Φ A) := by
-  sorry
+  classical
+  refine ⟨8, by norm_num, ?_⟩
+  intro n D ℓ θ hℓ hθ1 hθ Φ A hA
+  have hθ0' : (0 : ℝ) ≤ θ := by
+    have : (1 : ℝ) ≤ obsT := by norm_num [obsT]
+    linarith
+  set κ := kappa D.a with hκdef
+  set Λ := Lam D.a with hΛdef
+  have hκ1 : 1 < κ := one_lt_kappa D.ha0 D.ha1
+  have hκ0 : (0 : ℝ) < κ := by linarith
+  have hΛ1 : (1 : ℝ) ≤ Λ := one_le_Lam D.ha0 D.ha1
+  have hΛ0 : (0 : ℝ) ≤ Λ := by linarith
+  set Cst := Real.sqrt 8 * Real.sqrt κ * Λ with hCst
+  have hCst0 : 0 ≤ Cst := by positivity
+  have hCst_sq : Cst ^ 2 = 8 * κ * Λ ^ 2 := by
+    rw [hCst]
+    have h8 : Real.sqrt 8 ^ 2 = 8 := Real.sq_sqrt (by norm_num)
+    have hκs : Real.sqrt κ ^ 2 = κ := Real.sq_sqrt hκ0.le
+    nlinarith [h8, hκs]
+  -- the optimal test set
+  obtain ⟨B, hB⟩ := D.exists_DA_eq hθ Φ A
+  set φ : Cube n → ℝ := fun w => if w ∈ B then (1 : ℝ) else 0 with hφdef
+  set YA := ∑ x₀ ∈ A, D.startW θ x₀ * D.gamE φ (Φ x₀) with hYAdef
+  have hSA0 : 0 ≤ D.SA Φ A := D.SA_nonneg hθ Φ A
+  have hprobA0 : 0 ≤ D.probA θ A :=
+    Finset.sum_nonneg fun x₀ _ => D.startW_nonneg'' hθ x₀
+  have hYA0 : 0 ≤ YA := Finset.sum_nonneg fun x₀ _ =>
+    mul_nonneg (D.startW_nonneg'' hθ x₀) (D.gamE_nonneg φ hθ (Φ x₀))
+  -- step 1: the discrepancy bound through `√SA·√YA`
+  have hD1 : D.DA Φ A ≤ Cst * (Real.sqrt (D.SA Φ A) * Real.sqrt YA) := by
+    rw [hB]
+    exact D.abs_sum_Dtest_le B hθ0' hθ1 hθ Φ A
+  -- step 2: `YA ≤ 2κ·probA + Cst²·SA`
+  have hYA_le : YA ≤ 2 * κ * D.probA θ A + Cst ^ 2 * D.SA Φ A := by
+    have hstep : YA ≤ κ * D.probA θ A + Cst * (Real.sqrt (D.SA Φ A)
+        * Real.sqrt YA) := by
+      have h1 : YA ≤ ∑ x₀ ∈ A, D.startW θ x₀ *
+          (κ + Cst * D.dbar ℓ θ x₀ * (Real.sqrt (D.scoreEnergy (Φ x₀))
+            * Real.sqrt (D.gamE φ (Φ x₀)))) := by
+        refine Finset.sum_le_sum fun x₀ hx₀ => ?_
+        refine mul_le_mul_of_nonneg_left ?_ (D.startW_nonneg'' hθ x₀)
+        have h := D.gamE_le B hθ0' hθ1 hθ (Φ x₀)
+        calc D.gamE φ (Φ x₀) ≤ _ := h
+          _ = κ + Cst * D.dbar ℓ θ x₀ * (Real.sqrt (D.scoreEnergy (Φ x₀))
+              * Real.sqrt (D.gamE φ (Φ x₀))) := by rw [hCst, hκdef, hΛdef]
+      have h2 : ∑ x₀ ∈ A, D.startW θ x₀ *
+          (κ + Cst * D.dbar ℓ θ x₀ * (Real.sqrt (D.scoreEnergy (Φ x₀))
+            * Real.sqrt (D.gamE φ (Φ x₀))))
+          = κ * D.probA θ A + Cst * ∑ x₀ ∈ A, D.startW θ x₀ *
+              (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+                * Real.sqrt (D.gamE φ (Φ x₀))) := by
+        rw [probA, Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib]
+        refine Finset.sum_congr rfl fun x₀ _ => ?_
+        have hd0 : 0 ≤ D.dbar ℓ θ x₀ := D.dbar_nonneg ℓ θ x₀
+        have hsq : Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+            = D.dbar ℓ θ x₀ * Real.sqrt (D.scoreEnergy (Φ x₀)) := by
+          rw [Real.sqrt_mul (sq_nonneg _), Real.sqrt_sq hd0]
+        rw [hsq]
+        ring
+      have h3 : ∑ x₀ ∈ A, D.startW θ x₀ *
+          (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+            * Real.sqrt (D.gamE φ (Φ x₀)))
+          ≤ Real.sqrt (D.SA Φ A) * Real.sqrt YA := by
+        have hcs := weighted_cs A (fun x₀ => D.startW θ x₀)
+          (fun x₀ => D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+          (fun x₀ => D.gamE φ (Φ x₀))
+          (fun x₀ _ => D.startW_nonneg'' hθ x₀)
+          (fun x₀ _ => mul_nonneg (sq_nonneg _)
+            (D.scoreEnergy_nonneg hθ (Φ x₀)))
+          (fun x₀ _ => D.gamE_nonneg φ hθ (Φ x₀))
+        have hSAeq : (∑ x₀ ∈ A, D.startW θ x₀ *
+            (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))) = D.SA Φ A := by
+          refine Finset.sum_congr rfl fun x₀ _ => ?_
+          simp only [SA]
+          ring
+        rw [hSAeq] at hcs
+        exact hcs
+      calc YA ≤ κ * D.probA θ A + Cst * ∑ x₀ ∈ A, D.startW θ x₀ *
+            (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+              * Real.sqrt (D.gamE φ (Φ x₀))) := by
+          rw [← h2]; exact h1
+        _ ≤ κ * D.probA θ A + Cst * (Real.sqrt (D.SA Φ A) * Real.sqrt YA) := by
+          have := mul_le_mul_of_nonneg_left h3 hCst0
+          linarith
+    -- AM–GM absorption
+    have hAM : Cst * (Real.sqrt (D.SA Φ A) * Real.sqrt YA)
+        ≤ YA / 2 + Cst ^ 2 * D.SA Φ A / 2 := by
+      have hsY : Real.sqrt YA ^ 2 = YA := Real.sq_sqrt hYA0
+      have hsS : Real.sqrt (D.SA Φ A) ^ 2 = D.SA Φ A := Real.sq_sqrt hSA0
+      nlinarith [sq_nonneg (Real.sqrt YA - Cst * Real.sqrt (D.SA Φ A)),
+        Real.sqrt_nonneg YA, Real.sqrt_nonneg (D.SA Φ A), hCst0]
+    linarith
+  -- step 3: assemble, `√(a+b) ≤ √a + √b`
+  have hsqrt_add : ∀ a b : ℝ, 0 ≤ a → 0 ≤ b →
+      Real.sqrt (a + b) ≤ Real.sqrt a + Real.sqrt b := by
+    intro a b ha hb
+    have h : a + b ≤ (Real.sqrt a + Real.sqrt b) ^ 2 := by
+      have h1 := Real.sq_sqrt ha
+      have h2 := Real.sq_sqrt hb
+      nlinarith [Real.sqrt_nonneg a, Real.sqrt_nonneg b]
+    calc Real.sqrt (a + b)
+        ≤ Real.sqrt ((Real.sqrt a + Real.sqrt b) ^ 2) := Real.sqrt_le_sqrt h
+      _ = Real.sqrt a + Real.sqrt b := Real.sqrt_sq (by positivity)
+  have hterm1 : Cst * Real.sqrt (2 * κ) = 4 * κ * Λ := by
+    rw [hCst]
+    have h2κ : Real.sqrt (2 * κ) = Real.sqrt 2 * Real.sqrt κ :=
+      Real.sqrt_mul (by norm_num) _
+    have h82 : Real.sqrt 8 * Real.sqrt 2 = 4 := by
+      rw [← Real.sqrt_mul (by norm_num : (0:ℝ) ≤ 8)]
+      rw [show (8 : ℝ) * 2 = 4 ^ 2 by norm_num]
+      exact Real.sqrt_sq (by norm_num)
+    have hκκ : Real.sqrt κ * Real.sqrt κ = κ := Real.mul_self_sqrt hκ0.le
+    calc Real.sqrt 8 * Real.sqrt κ * Λ * (Real.sqrt 2 * Real.sqrt κ)
+        = (Real.sqrt 8 * Real.sqrt 2) * (Real.sqrt κ * Real.sqrt κ) * Λ := by
+          ring
+      _ = 4 * κ * Λ := by rw [h82, hκκ]
+  have hterm2 : Cst * Real.sqrt (Cst ^ 2) = 8 * κ * Λ ^ 2 := by
+    rw [Real.sqrt_sq hCst0, ← sq, hCst_sq]
+  calc D.DA Φ A
+      ≤ Cst * (Real.sqrt (D.SA Φ A) * Real.sqrt YA) := hD1
+    _ ≤ Cst * (Real.sqrt (D.SA Φ A) *
+          Real.sqrt (2 * κ * D.probA θ A + Cst ^ 2 * D.SA Φ A)) := by
+        refine mul_le_mul_of_nonneg_left ?_ hCst0
+        exact mul_le_mul_of_nonneg_left (Real.sqrt_le_sqrt hYA_le)
+          (Real.sqrt_nonneg _)
+    _ ≤ Cst * (Real.sqrt (D.SA Φ A) *
+          (Real.sqrt (2 * κ * D.probA θ A)
+            + Real.sqrt (Cst ^ 2 * D.SA Φ A))) := by
+        refine mul_le_mul_of_nonneg_left ?_ hCst0
+        refine mul_le_mul_of_nonneg_left ?_ (Real.sqrt_nonneg _)
+        exact hsqrt_add _ _ (by positivity) (by positivity)
+    _ = Cst * Real.sqrt (2 * κ) * Real.sqrt (D.SA Φ A * D.probA θ A)
+        + Cst * Real.sqrt (Cst ^ 2) * D.SA Φ A := by
+        have e1 : Real.sqrt (2 * κ * D.probA θ A)
+            = Real.sqrt (2 * κ) * Real.sqrt (D.probA θ A) :=
+          Real.sqrt_mul (by positivity) _
+        have e2 : Real.sqrt (Cst ^ 2 * D.SA Φ A)
+            = Real.sqrt (Cst ^ 2) * Real.sqrt (D.SA Φ A) :=
+          Real.sqrt_mul (sq_nonneg _) _
+        have e3 : Real.sqrt (D.SA Φ A) * Real.sqrt (D.probA θ A)
+            = Real.sqrt (D.SA Φ A * D.probA θ A) :=
+          (Real.sqrt_mul hSA0 _).symm
+        have e4 : Real.sqrt (D.SA Φ A) * Real.sqrt (D.SA Φ A) = D.SA Φ A :=
+          Real.mul_self_sqrt hSA0
+        rw [e1, e2]
+        calc Cst * (Real.sqrt (D.SA Φ A) *
+              (Real.sqrt (2 * κ) * Real.sqrt (D.probA θ A)
+                + Real.sqrt (Cst ^ 2) * Real.sqrt (D.SA Φ A)))
+            = Cst * Real.sqrt (2 * κ) *
+                (Real.sqrt (D.SA Φ A) * Real.sqrt (D.probA θ A))
+              + Cst * Real.sqrt (Cst ^ 2) *
+                (Real.sqrt (D.SA Φ A) * Real.sqrt (D.SA Φ A)) := by ring
+          _ = _ := by rw [e3, e4]
+    _ = 4 * κ * Λ * Real.sqrt (D.SA Φ A * D.probA θ A)
+        + 8 * κ * Λ ^ 2 * D.SA Φ A := by rw [hterm1, hterm2]
+    _ ≤ 8 * (κ * Λ * Real.sqrt (D.SA Φ A * D.probA θ A)
+        + κ * Λ ^ 2 * D.SA Φ A) := by
+        have hs0 : 0 ≤ Real.sqrt (D.SA Φ A * D.probA θ A) := Real.sqrt_nonneg _
+        nlinarith [mul_nonneg (mul_nonneg hκ0.le hΛ0) hs0,
+          mul_nonneg (mul_nonneg hκ0.le (sq_nonneg Λ)) hSA0]
 
 end Dat
 
