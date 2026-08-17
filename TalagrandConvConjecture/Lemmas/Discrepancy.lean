@@ -1639,6 +1639,94 @@ private lemma abs_DtestF_le (B : Finset (Cube n)) {ℓ θ : ℝ}
         * (Real.sqrt (D.scoreEnergy c) * Real.sqrt (D.gamE φ c)) := by
         rw [hCst]
 
+private lemma startW_nonneg'' {θ : ℝ} (hθ : θ ≤ obsT) (x₀ : Cube n) :
+    0 ≤ D.startW θ x₀ := by
+  have hT : 0 ≤ D.T - θ := by have := D.obsT_lt_T; linarith
+  simp only [startW, revDensity]
+  exact div_nonneg (D.fs_pos hT x₀).le (by positivity)
+
+private lemma gamE_nonneg (φ : Cube n → ℝ) {ℓ θ : ℝ} (hθ : θ ≤ obsT)
+    {x₀ : Cube n} (c : D.CFlow ℓ θ x₀) : 0 ≤ D.gamE φ c := by
+  refine Finset.sum_nonneg fun k hk => ?_
+  exact intervalIntegral.integral_nonneg
+    (c.is.grid.mono k (Finset.mem_range.mp hk))
+    (fun t ht => D.gamInt_nonneg φ hθ c (Finset.mem_range.mp hk) ht)
+
+/-- (B6): the `x₀`-weighted discrepancy bound
+`|∑_A startW·Dtest| ≤ √8·√κ·Λ·√(𝒮_A)·√(Y_A)` [LGF eq (4.18)]. -/
+private lemma abs_sum_Dtest_le (B : Finset (Cube n)) {ℓ θ : ℝ}
+    (hθ0' : 0 ≤ θ) (hθ1 : obsT - 1 ≤ θ) (hθ : θ ≤ obsT)
+    (Φ : D.CFlowFamily ℓ θ) (A : Finset (Cube n)) :
+    |∑ x₀ ∈ A, D.startW θ x₀ * D.DtestF (Φ x₀) B|
+      ≤ Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a
+        * (Real.sqrt (D.SA Φ A)
+          * Real.sqrt (∑ x₀ ∈ A, D.startW θ x₀ *
+              D.gamE (fun w => if w ∈ B then (1 : ℝ) else 0) (Φ x₀))) := by
+  classical
+  set φ : Cube n → ℝ := fun w => if w ∈ B then (1 : ℝ) else 0 with hφdef
+  set Cst := Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a with hCst
+  have hCst0 : 0 ≤ Cst := by
+    have h3 : (0:ℝ) ≤ Lam D.a := le_trans zero_le_one (one_le_Lam D.ha0 D.ha1)
+    have h1 : (0:ℝ) ≤ Real.sqrt 8 := Real.sqrt_nonneg _
+    have h2 : (0:ℝ) ≤ Real.sqrt (kappa D.a) := Real.sqrt_nonneg _
+    positivity
+  have hsw0 : ∀ x₀ ∈ A, 0 ≤ D.startW θ x₀ := fun x₀ _ => D.startW_nonneg'' hθ x₀
+  -- triangle then the per-flow bound with `δ̄·√ = √(δ̄²·)`
+  have hstep1 : |∑ x₀ ∈ A, D.startW θ x₀ * D.DtestF (Φ x₀) B|
+      ≤ Cst * ∑ x₀ ∈ A, D.startW θ x₀ *
+          (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+            * Real.sqrt (D.gamE φ (Φ x₀))) := by
+    refine le_trans (Finset.abs_sum_le_sum_abs _ _) ?_
+    rw [Finset.mul_sum]
+    refine Finset.sum_le_sum fun x₀ hx₀ => ?_
+    have hd0 : 0 ≤ D.dbar ℓ θ x₀ := D.dbar_nonneg ℓ θ x₀
+    have hsqrt : D.dbar ℓ θ x₀ * Real.sqrt (D.scoreEnergy (Φ x₀))
+        = Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀)) := by
+      rw [Real.sqrt_mul (sq_nonneg _), Real.sqrt_sq hd0]
+    calc |D.startW θ x₀ * D.DtestF (Φ x₀) B|
+        = D.startW θ x₀ * |D.DtestF (Φ x₀) B| := by
+          rw [abs_mul, abs_of_nonneg (hsw0 x₀ hx₀)]
+      _ ≤ D.startW θ x₀ * (Cst * D.dbar ℓ θ x₀ *
+            (Real.sqrt (D.scoreEnergy (Φ x₀)) * Real.sqrt (D.gamE φ (Φ x₀)))) := by
+          refine mul_le_mul_of_nonneg_left ?_ (hsw0 x₀ hx₀)
+          have h := D.abs_DtestF_le B hθ0' hθ1 hθ (Φ x₀)
+          calc |D.DtestF (Φ x₀) B| ≤ _ := h
+            _ = Cst * D.dbar ℓ θ x₀ *
+                (Real.sqrt (D.scoreEnergy (Φ x₀))
+                  * Real.sqrt (D.gamE φ (Φ x₀))) := by rw [hCst]
+      _ = Cst * (D.startW θ x₀ *
+            (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+              * Real.sqrt (D.gamE φ (Φ x₀)))) := by
+          rw [← hsqrt]; ring
+  -- weighted Cauchy–Schwarz over the starting points
+  have hstep2 : ∑ x₀ ∈ A, D.startW θ x₀ *
+        (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+          * Real.sqrt (D.gamE φ (Φ x₀)))
+      ≤ Real.sqrt (∑ x₀ ∈ A, D.startW θ x₀ *
+            (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀)))
+        * Real.sqrt (∑ x₀ ∈ A, D.startW θ x₀ * D.gamE φ (Φ x₀)) :=
+    weighted_cs A _ _ _ hsw0
+      (fun x₀ _ => mul_nonneg (sq_nonneg _) (D.scoreEnergy_nonneg hθ (Φ x₀)))
+      (fun x₀ _ => D.gamE_nonneg φ hθ (Φ x₀))
+  have hSA : (∑ x₀ ∈ A, D.startW θ x₀ *
+        (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))) = D.SA Φ A := by
+    refine Finset.sum_congr rfl fun x₀ _ => ?_
+    simp only [SA]
+    ring
+  calc |∑ x₀ ∈ A, D.startW θ x₀ * D.DtestF (Φ x₀) B|
+      ≤ Cst * ∑ x₀ ∈ A, D.startW θ x₀ *
+          (Real.sqrt (D.dbar ℓ θ x₀ ^ 2 * D.scoreEnergy (Φ x₀))
+            * Real.sqrt (D.gamE φ (Φ x₀))) := hstep1
+    _ ≤ Cst * (Real.sqrt (D.SA Φ A)
+          * Real.sqrt (∑ x₀ ∈ A, D.startW θ x₀ * D.gamE φ (Φ x₀))) := by
+        refine mul_le_mul_of_nonneg_left ?_ hCst0
+        rw [← hSA]
+        exact hstep2
+    _ = Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a
+        * (Real.sqrt (D.SA Φ A)
+          * Real.sqrt (∑ x₀ ∈ A, D.startW θ x₀ * D.gamE φ (Φ x₀))) := by
+        rw [hCst]
+
 /-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
 `C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
 `A ⊆ ℰ_θ`,
