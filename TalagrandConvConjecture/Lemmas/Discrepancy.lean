@@ -1752,12 +1752,12 @@ private noncomputable def bpInt (φ : Cube n → ℝ) (t : ℝ) (x y : Cube n) :
 
 private lemma Gam_eq_ap_add_bp (φ : Cube n → ℝ) (t : ℝ) (x y : Cube n) :
     D.Gam φ t x y = D.apInt φ t x y + D.bpInt φ t x y := by
-  simp only [Gam, apInt, bpInt, ← Finset.sum_add_distrib, ← Finset.mul_sum]
-  refine Finset.sum_congr rfl fun ζ _ => ?_
-  congr 1
+  simp only [Gam, apInt, bpInt]
   rw [← Finset.sum_add_distrib]
-  refine Finset.sum_congr rfl fun i _ => ?_
-  ring
+  refine Finset.sum_congr rfl fun ζ _ => ?_
+  rw [← mul_add, ← Finset.sum_add_distrib]
+  congr 1
+  exact Finset.sum_congr rfl fun i _ => by ring
 
 /-- `q_t^ζ(x,y) ∈ [0,1]` for a `{0,1}`-valued test. -/
 private lemma qB_mem01 {φ : Cube n → ℝ} (hφ : ∀ w, φ w = 0 ∨ φ w = 1)
@@ -1866,8 +1866,8 @@ private lemma hasDerivAt_Qtest (φ : Cube n → ℝ) {t : ℝ} (ht : t < D.T)
           * dmext φ i (D.mB t x y ζ) ^ 2) := by
     simp only [apInt]
     refine Finset.sum_congr rfl fun ζ _ => ?_
-    rw [Finset.mul_sum]
     congr 1
+    rw [Finset.mul_sum]
     exact Finset.sum_congr rfl fun i _ => by ring
   have hfin :
       (∑ ζ : Cube n, (-(∑ i, D.Y t i x *
@@ -2040,7 +2040,7 @@ private lemma abs_pertQ_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
             = (D.qB φ t ζ x (flipCoord i y) + D.qB φ t ζ x y) *
               (D.qB φ t ζ x (flipCoord i y) - D.qB φ t ζ x y) := by ring
         rw [hfac, D.qB_flip_y_sub φ t ζ x y i]
-      rw [if_pos hY, hcoef, hdiff, abs_mul, mul_comm
+      rw [if_pos hY, hcoef, hdiff, abs_mul, abs_mul, mul_comm
         |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| |D.Sc t i x|,
         mul_assoc]
       refine mul_le_mul_of_nonneg_left ?_ (abs_nonneg _)
@@ -2161,7 +2161,7 @@ private lemma abs_pertQ_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
                 (D.qB φ t ζ (flipCoord i x) (flipCoord i y)
                   - D.qB φ t ζ (flipCoord i x) y) := by ring
           rw [mul_assoc, hfac, D.qB_flip_y_flip_x_sub φ t ζ x y i]
-        rw [hcoef, hdiff, abs_mul, mul_comm
+        rw [hcoef, hdiff, abs_mul, abs_mul, mul_comm
           |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| |D.Sc t i x|, mul_assoc]
         refine mul_le_mul_of_nonneg_left ?_ (abs_nonneg _)
         have hperζ : ∀ ζ : Cube n,
