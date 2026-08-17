@@ -92,7 +92,7 @@ theorem chain_le {K : ℕ} (hK : 0 < K) {z : ℕ → ℝ} {u φ : ℕ → ℝ �
     (hu : ∀ k, k < K → ContinuousOn (u k) (Set.Icc (z k) (z (k + 1))))
     (hd : ∀ k, k < K → ∀ t ∈ Set.Icc (z k) (z (k + 1)), ∃ v ≤ φ k t,
       HasDerivWithinAt (u k) v (Set.Icc (z k) (z (k + 1))) t)
-    (hφ : ∀ k, k < K, IntervalIntegrable (φ k) MeasureTheory.volume (z k) (z (k + 1)))
+    (hφ : ∀ k, k < K → IntervalIntegrable (φ k) MeasureTheory.volume (z k) (z (k + 1)))
     (hnode : ∀ k, k + 1 < K → u (k + 1) (z (k + 1)) ≤ u k (z (k + 1))) :
     u (K - 1) (z K) ≤ u 0 (z 0)
       + ∑ k ∈ Finset.range K, ∫ t in z k..z (k + 1), φ k t := by
@@ -106,7 +106,7 @@ theorem chain_eq {K : ℕ} (hK : 0 < K) {z : ℕ → ℝ} {u φ : ℕ → ℝ �
     (hu : ∀ k, k < K → ContinuousOn (u k) (Set.Icc (z k) (z (k + 1))))
     (hd : ∀ k, k < K → ∀ t ∈ Set.Icc (z k) (z (k + 1)),
       HasDerivWithinAt (u k) (φ k t) (Set.Icc (z k) (z (k + 1))) t)
-    (hφ : ∀ k, k < K, IntervalIntegrable (φ k) MeasureTheory.volume (z k) (z (k + 1)))
+    (hφ : ∀ k, k < K → IntervalIntegrable (φ k) MeasureTheory.volume (z k) (z (k + 1)))
     (hnode : ∀ k, k + 1 < K → u (k + 1) (z (k + 1)) = u k (z (k + 1))) :
     u (K - 1) (z K) = u 0 (z 0)
       + ∑ k ∈ Finset.range K, ∫ t in z k..z (k + 1), φ k t := by

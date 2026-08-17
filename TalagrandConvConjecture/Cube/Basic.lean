@@ -114,9 +114,10 @@ lemma unifE_nonneg {g : Cube n → ℝ} (hg : ∀ x, 0 ≤ g x) : 0 ≤ unifE g 
   positivity
 
 @[simp] lemma unifE_const (c : ℝ) : unifE (fun _ : Cube n => c) = c := by
-  simp [unifE, Finset.sum_const, card_cube]
-  ring_nf
-  rw [mul_inv_cancel₀ (by positivity)]
+  have h2 : ((2 : ℝ)) ^ n ≠ 0 := by positivity
+  simp only [unifE, Finset.sum_const, Finset.card_univ, card_cube,
+    nsmul_eq_mul, Nat.cast_pow, Nat.cast_ofNat]
+  field_simp
 
 lemma unifE_add (g h : Cube n → ℝ) :
     unifE (fun x => g x + h x) = unifE g + unifE h := by
@@ -128,8 +129,10 @@ lemma unifE_smul (c : ℝ) (g : Cube n → ℝ) :
 
 lemma unifE_mono {g h : Cube n → ℝ} (hgh : ∀ x, g x ≤ h x) :
     unifE g ≤ unifE h := by
-  have : ∑ x, g x ≤ ∑ x, h x := Finset.sum_le_sum fun x _ => hgh x
-  exact div_le_div_of_nonneg_right this (by positivity) |>.trans_eq rfl
+  unfold unifE
+  gcongr with x _
+  · positivity
+  · exact hgh x
 
 /-- Invariance of `λ` under coordinate flips. -/
 lemma unifE_comp_flipCoord (i : Fin n) (g : Cube n → ℝ) :
@@ -145,9 +148,13 @@ lemma unifMeas_nonneg (E : Set (Cube n)) : 0 ≤ unifMeas E :=
   unifE_nonneg fun x => Set.indicator_nonneg (fun _ _ => zero_le_one) x
 
 lemma unifMeas_le_one (E : Set (Cube n)) : unifMeas E ≤ 1 := by
-  have := unifE_mono (g := (E.indicator fun _ => (1 : ℝ)))
-    (h := fun _ => (1 : ℝ)) (fun x => Set.indicator_le_self' (fun _ _ => zero_le_one) x)
-  simpa [unifMeas] using this
+  have hle : ∀ x, E.indicator (fun _ => (1 : ℝ)) x ≤ 1 := by
+    intro x
+    by_cases hx : x ∈ E
+    · simp [Set.indicator_of_mem hx]
+    · simp [Set.indicator_of_notMem hx]
+  calc unifMeas E ≤ unifE (fun _ => (1 : ℝ)) := unifE_mono hle
+    _ = 1 := unifE_const 1
 
 lemma unifMeas_mono {E F : Set (Cube n)} (h : E ⊆ F) :
     unifMeas E ≤ unifMeas F := by
@@ -160,7 +167,7 @@ lemma unifMeas_mono {E F : Set (Cube n)} (h : E ⊆ F) :
 /-- Markov's inequality on the cube: for `g ≥ 0` and `u > 0`,
 `u·λ(g ≥ u) ≤ 𝔼_λ g`. Gives the trivial bound `ψ_μ(u) ≤ 1` of [LGF §1]. -/
 lemma mul_unifMeas_le_unifE {g : Cube n → ℝ} (hg : ∀ x, 0 ≤ g x) {u : ℝ}
-    (hu : 0 < u) : u * unifMeas {x | u ≤ g x} ≤ unifE g := by
+    (_hu : 0 < u) : u * unifMeas {x | u ≤ g x} ≤ unifE g := by
   rw [unifMeas, ← unifE_smul]
   refine unifE_mono fun x => ?_
   by_cases hx : x ∈ {x | u ≤ g x}

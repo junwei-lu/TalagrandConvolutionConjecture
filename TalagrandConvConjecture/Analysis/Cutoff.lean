@@ -12,6 +12,8 @@ smoothstep `s v = v²(3-2v)` and prove the FTC/Cauchy–Schwarz estimate for
 
 namespace Talagrand
 
+open MeasureTheory
+
 /-- Cubic smoothstep on `[0,1]`. -/
 def smoothstep (v : ℝ) : ℝ := v ^ 2 * (3 - 2 * v)
 
