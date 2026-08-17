@@ -479,6 +479,276 @@ lemma dirichlet_le_flux_integral (hf : ∀ x, 0 < f x) (s ℓ : ℝ) :
       ≤ 256 * ∫ u in ℓ - 1..ℓ + 2, levelFlux f s u := by
   sorry
 
+/-! ### `t ↦ f_t(x)` is a polynomial in `e^{-t}` with constant term `𝔼_λ f` -/
+
+private lemma prod_one_add_mul (ρ : ℝ) (a : Fin n → ℝ) :
+    ∏ j, (1 + ρ * a j) = ∑ t ∈ (Finset.univ : Finset (Fin n)).powerset,
+      ρ ^ t.card * ∏ i ∈ t, a i := by
+  classical
+  have h := Finset.prod_add (fun i : Fin n => ρ * a i) (fun _ : Fin n => (1 : ℝ))
+    (Finset.univ : Finset (Fin n))
+  simp only [Finset.prod_const_one, mul_one] at h
+  have h2 : ∏ j, (1 + ρ * a j) = ∏ j, (ρ * a j + 1) :=
+    Finset.prod_congr rfl fun j _ => add_comm _ _
+  rw [h2, h]
+  refine Finset.sum_congr rfl fun t _ => ?_
+  rw [Finset.prod_mul_distrib, Finset.prod_const]
+
+private lemma prod_one_add_mul_range (ρ : ℝ) (a : Fin n → ℝ) :
+    ∏ j, (1 + ρ * a j) = ∑ k ∈ Finset.range (n + 1),
+      ρ ^ k * ∑ t ∈ Finset.powersetCard k (Finset.univ : Finset (Fin n)),
+        ∏ i ∈ t, a i := by
+  classical
+  rw [prod_one_add_mul, Finset.sum_powerset]
+  simp only [Finset.card_univ, Fintype.card_fin]
+  refine Finset.sum_congr rfl fun k _ => ?_
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl fun t ht => ?_
+  rw [(Finset.mem_powersetCard.1 ht).2]
+
+/-- `s ↦ f_s(x)` is a polynomial of degree `≤ n` in `e^{-s}` whose constant
+coefficient is `𝔼_λ f` (the `s → ∞` limit). -/
+private lemma heatAt_expPoly (f : Cube n → ℝ) :
+    ∃ c : Cube n → ℕ → ℝ, (∀ x, c x 0 = unifE f) ∧
+      ∀ (x : Cube n) (s : ℝ),
+        heatAt f s x = ∑ k ∈ Finset.range (n + 1), c x k * Real.exp (-s) ^ k := by
+  classical
+  refine ⟨fun x k => ∑ y : Cube n,
+    (∑ t ∈ Finset.powersetCard k (Finset.univ : Finset (Fin n)),
+      ∏ i ∈ t, (toR (x i) * toR (y i))) * (f y / 2 ^ n), ?_, ?_⟩
+  · intro x
+    simp only [Finset.powersetCard_zero, Finset.sum_singleton, Finset.prod_empty, one_mul]
+    rw [unifE, Finset.sum_div]
+  · intro x s
+    rw [heatAt, smooth_eq_kernel_sum]
+    have hkey : ∀ z : Cube n,
+        (∏ j, (1 + Real.exp (-s) * toR (x j) * toR (z j)) / 2) * f z
+        = ∑ k ∈ Finset.range (n + 1),
+            (∑ t ∈ Finset.powersetCard k (Finset.univ : Finset (Fin n)),
+              ∏ i ∈ t, (toR (x i) * toR (z i))) * (f z / 2 ^ n) * Real.exp (-s) ^ k := by
+      intro z
+      have hp : (∏ j, (1 + Real.exp (-s) * toR (x j) * toR (z j)) / 2)
+          = (∏ j, (1 + Real.exp (-s) * (toR (x j) * toR (z j)))) / 2 ^ n := by
+        rw [Finset.prod_div_distrib, Finset.prod_const, Finset.card_univ,
+          Fintype.card_fin]
+        congr 1
+        exact Finset.prod_congr rfl fun j _ => by ring
+      rw [hp, prod_one_add_mul_range, Finset.sum_div, Finset.sum_mul]
+      exact Finset.sum_congr rfl fun k _ => by ring
+    rw [Finset.sum_congr rfl fun z (_ : z ∈ Finset.univ) => hkey z, Finset.sum_comm]
+    exact Finset.sum_congr rfl fun k _ => (Finset.sum_mul _ _ _).symm
+
+/-- Off a finite set of times, no value of the flow sits exactly on the level
+`e^u` (`u > 0`, so `e^u ≠ 1 = 𝔼_λ f`). -/
+private lemma finite_crossing (f : Cube n → ℝ) (hm : unifE f = 1) {u : ℝ}
+    (hu : 0 < u) : {s : ℝ | ∃ x : Cube n, heatAt f s x = Real.exp u}.Finite := by
+  obtain ⟨c, hc0, hcrep⟩ := heatAt_expPoly f
+  have hv : ∀ x : Cube n, Real.exp u ≠ c x 0 := by
+    intro x
+    rw [hc0 x, hm]
+    refine ne_of_gt ?_
+    rw [← Real.exp_zero]
+    exact Real.exp_lt_exp.mpr hu
+  have hset : {s : ℝ | ∃ x : Cube n, heatAt f s x = Real.exp u}
+      = {s : ℝ | ∃ x : Cube n,
+          ∑ k ∈ Finset.range (n + 1), c x k * Real.exp (-s) ^ k = Real.exp u} := by
+    ext s
+    constructor
+    · rintro ⟨x, hx⟩; exact ⟨x, by rw [← hcrep x s]; exact hx⟩
+    · rintro ⟨x, hx⟩; exact ⟨x, by rw [hcrep x s]; exact hx⟩
+  rw [hset]
+  exact finite_setOf_expPoly_family_eq c (fun _ => Real.exp u) hv
+
+/-! ### The derivative of the level excess off crossing times -/
+
+private lemma hasDerivAt_levelExcess (f : Cube n → ℝ) {s u : ℝ}
+    (hne : ∀ x : Cube n, heatAt f s x ≠ Real.exp u) :
+    HasDerivAt (fun σ => levelExcess f σ u)
+      (unifE (fun x =>
+        if Real.exp u < heatAt f s x then cubeLap (heatAt f s) x else 0)) s := by
+  classical
+  have hx : ∀ x : Cube n, HasDerivAt (fun σ => max (heatAt f σ x - Real.exp u) 0)
+      (if Real.exp u < heatAt f s x then cubeLap (heatAt f s) x else 0) s := by
+    intro x
+    rcases lt_trichotomy (Real.exp u) (heatAt f s x) with h | h | h
+    · rw [if_pos h]
+      have hev : ∀ᶠ σ in nhds s, Real.exp u < heatAt f σ x :=
+        (isOpen_lt continuous_const (continuous_heatAt f x)).mem_nhds h
+      have hd : HasDerivAt (fun σ => heatAt f σ x - Real.exp u)
+          (cubeLap (heatAt f s) x) s := (hasDerivAt_smooth_exp f x s).sub_const _
+      refine hd.congr_of_eventuallyEq ?_
+      filter_upwards [hev] with σ hσ
+      exact max_eq_left (by linarith)
+    · exact absurd h.symm (hne x)
+    · rw [if_neg (not_lt.mpr h.le)]
+      have hev : ∀ᶠ σ in nhds s, heatAt f σ x < Real.exp u :=
+        (isOpen_lt (continuous_heatAt f x) continuous_const).mem_nhds h
+      refine (hasDerivAt_const s (0 : ℝ)).congr_of_eventuallyEq ?_
+      filter_upwards [hev] with σ hσ
+      exact max_eq_right (by linarith)
+  have hsum : HasDerivAt (∑ x ∈ (Finset.univ : Finset (Cube n)),
+        fun σ : ℝ => max (heatAt f σ x - Real.exp u) 0)
+      (∑ x : Cube n,
+        if Real.exp u < heatAt f s x then cubeLap (heatAt f s) x else 0) s :=
+    HasDerivAt.sum fun x _ => hx x
+  have heq : (∑ x ∈ (Finset.univ : Finset (Cube n)),
+        fun σ : ℝ => max (heatAt f σ x - Real.exp u) 0)
+      = fun σ : ℝ => ∑ x : Cube n, max (heatAt f σ x - Real.exp u) 0 := by
+    funext σ; simp
+  rw [heq] at hsum
+  simpa [levelExcess, unifE] using hsum.div_const ((2 : ℝ) ^ n)
+
+/-- The signed level-set Dirichlet identity: at a non-crossing time the
+derivative of the level excess is `-levelFlux` (pair `x` with `σ_i x` and use
+that `e^u` separates the two values exactly on the flux support). -/
+private lemma unifE_indicator_cubeLap (f : Cube n → ℝ) {s u : ℝ}
+    (hne : ∀ x : Cube n, heatAt f s x ≠ Real.exp u) :
+    unifE (fun x =>
+        if Real.exp u < heatAt f s x then cubeLap (heatAt f s) x else 0)
+      = -levelFlux f s u := by
+  classical
+  have hpt : ∀ (i : Fin n) (x : Cube n),
+      ((if Real.exp u < heatAt f s x then (1 : ℝ) else 0)
+        - (if Real.exp u < heatAt f s (flipCoord i x) then (1 : ℝ) else 0))
+        * (heatAt f s (flipCoord i x) - heatAt f s x)
+      = -fluxTerm f s u x i := by
+    intro i x
+    rw [fluxTerm]
+    rcases lt_or_gt_of_ne (hne x) with hx | hx <;>
+      rcases lt_or_gt_of_ne (hne (flipCoord i x)) with hy | hy
+    · have hnm : Real.exp u ∉ Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x)) := by
+        intro h
+        rcases Set.mem_uIoc.1 h with ⟨p1, p2⟩ | ⟨p1, p2⟩ <;> linarith
+      rw [if_neg (not_lt.mpr hx.le), if_neg (not_lt.mpr hy.le),
+        Set.indicator_of_notMem hnm]
+      ring
+    · have hmem : Real.exp u ∈ Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x)) :=
+        Set.mem_uIoc.2 (Or.inl ⟨hx, hy.le⟩)
+      rw [if_neg (not_lt.mpr hx.le), if_pos hy, Set.indicator_of_mem hmem,
+        abs_of_pos (by linarith)]
+      ring
+    · have hmem : Real.exp u ∈ Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x)) :=
+        Set.mem_uIoc.2 (Or.inr ⟨hy, hx.le⟩)
+      rw [if_pos hx, if_neg (not_lt.mpr hy.le), Set.indicator_of_mem hmem,
+        abs_of_neg (by linarith)]
+      ring
+    · have hnm : Real.exp u ∉ Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x)) := by
+        intro h
+        rcases Set.mem_uIoc.1 h with ⟨p1, p2⟩ | ⟨p1, p2⟩ <;> linarith
+      rw [if_pos hx, if_pos hy, Set.indicator_of_notMem hnm]
+      ring
+  have hsym : ∀ i : Fin n,
+      ∑ x : Cube n, (if Real.exp u < heatAt f s x then (1 : ℝ) else 0)
+          * (heatAt f s (flipCoord i x) - heatAt f s x)
+        = -(1 / 2) * ∑ x : Cube n, fluxTerm f s u x i := by
+    intro i
+    have hflip := sum_comp_flipCoord i (fun y : Cube n =>
+      (if Real.exp u < heatAt f s y then (1 : ℝ) else 0)
+        * (heatAt f s (flipCoord i y) - heatAt f s y))
+    simp only [flipCoord_flipCoord] at hflip
+    have hexpand : ∑ x : Cube n,
+        ((if Real.exp u < heatAt f s x then (1 : ℝ) else 0)
+          - (if Real.exp u < heatAt f s (flipCoord i x) then (1 : ℝ) else 0))
+          * (heatAt f s (flipCoord i x) - heatAt f s x)
+        = (∑ x : Cube n, (if Real.exp u < heatAt f s x then (1 : ℝ) else 0)
+            * (heatAt f s (flipCoord i x) - heatAt f s x))
+          + ∑ x : Cube n, (if Real.exp u < heatAt f s (flipCoord i x) then (1 : ℝ) else 0)
+            * (heatAt f s x - heatAt f s (flipCoord i x)) := by
+      rw [← Finset.sum_add_distrib]
+      exact Finset.sum_congr rfl fun x _ => by ring
+    have hcomb : ∑ x : Cube n,
+        ((if Real.exp u < heatAt f s x then (1 : ℝ) else 0)
+          - (if Real.exp u < heatAt f s (flipCoord i x) then (1 : ℝ) else 0))
+          * (heatAt f s (flipCoord i x) - heatAt f s x)
+        = -∑ x : Cube n, fluxTerm f s u x i := by
+      rw [← Finset.sum_neg_distrib]
+      exact Finset.sum_congr rfl fun x _ => hpt i x
+    rw [hflip] at hexpand
+    linarith [hexpand, hcomb]
+  have hmain : ∑ x : Cube n,
+      (if Real.exp u < heatAt f s x then cubeLap (heatAt f s) x else 0)
+      = -(1 / 4) * ∑ x : Cube n, ∑ i, fluxTerm f s u x i := by
+    have hstep1 : ∀ x : Cube n,
+        (if Real.exp u < heatAt f s x then cubeLap (heatAt f s) x else 0)
+        = ∑ i, ((if Real.exp u < heatAt f s x then (1 : ℝ) else 0)
+            * (heatAt f s (flipCoord i x) - heatAt f s x)) / 2 := by
+      intro x
+      by_cases h : Real.exp u < heatAt f s x
+      · rw [if_pos h]
+        simp only [cubeLap, if_pos h, one_mul]
+        rw [Finset.sum_div]
+      · simp only [if_neg h, zero_mul, zero_div, Finset.sum_const_zero]
+    rw [Finset.sum_congr rfl fun x (_ : x ∈ Finset.univ) => hstep1 x, Finset.sum_comm]
+    have hper : ∀ i : Fin n, ∑ x : Cube n,
+        ((if Real.exp u < heatAt f s x then (1 : ℝ) else 0)
+          * (heatAt f s (flipCoord i x) - heatAt f s x)) / 2
+        = -(1 / 4) * ∑ x : Cube n, fluxTerm f s u x i := by
+      intro i
+      rw [← Finset.sum_div, hsym i]
+      ring
+    rw [Finset.sum_congr rfl fun i (_ : i ∈ Finset.univ) => hper i, ← Finset.mul_sum,
+      Finset.sum_comm]
+  simp only [levelFlux_eq_fluxTerm, unifE, hmain]
+  ring
+
+/-! ### Integrability in time of the level flux -/
+
+private lemma intervalIntegrable_finsum {ι : Type*} [Fintype ι] (g : ι → ℝ → ℝ)
+    (a b : ℝ) (h : ∀ i, IntervalIntegrable (g i) volume a b) :
+    IntervalIntegrable (fun t => ∑ i, g i t) volume a b := by
+  classical
+  have h1 := IntervalIntegrable.sum (Finset.univ : Finset ι)
+    (fun i (_ : i ∈ (Finset.univ : Finset ι)) => h i)
+  have heq : (∑ i ∈ (Finset.univ : Finset ι), g i) = fun t => ∑ i, g i t := by
+    funext t; simp
+  rwa [heq] at h1
+
+private lemma intervalIntegrable_fluxTerm_time (f : Cube n → ℝ) (u : ℝ)
+    (x : Cube n) (i : Fin n) (a b : ℝ) :
+    IntervalIntegrable (fun σ => fluxTerm f σ u x i) volume a b := by
+  have hca : Continuous fun σ : ℝ => heatAt f σ x := continuous_heatAt f x
+  have hcb : Continuous fun σ : ℝ => heatAt f σ (flipCoord i x) :=
+    continuous_heatAt f (flipCoord i x)
+  have hTm : MeasurableSet {σ : ℝ |
+      Real.exp u ∈ Set.uIoc (heatAt f σ x) (heatAt f σ (flipCoord i x))} := by
+    have hTeq : {σ : ℝ |
+        Real.exp u ∈ Set.uIoc (heatAt f σ x) (heatAt f σ (flipCoord i x))}
+        = ({σ : ℝ | heatAt f σ x < Real.exp u}
+            ∩ {σ : ℝ | Real.exp u ≤ heatAt f σ (flipCoord i x)})
+          ∪ ({σ : ℝ | heatAt f σ (flipCoord i x) < Real.exp u}
+            ∩ {σ : ℝ | Real.exp u ≤ heatAt f σ x}) := by
+      ext σ
+      simp only [Set.mem_setOf_eq, Set.mem_union, Set.mem_inter_iff, Set.mem_uIoc]
+    rw [hTeq]
+    exact ((measurableSet_lt hca.measurable measurable_const).inter
+        (measurableSet_le measurable_const hcb.measurable)).union
+      ((measurableSet_lt hcb.measurable measurable_const).inter
+        (measurableSet_le measurable_const hca.measurable))
+  have heq : (fun σ => fluxTerm f σ u x i)
+      = {σ : ℝ | Real.exp u ∈
+          Set.uIoc (heatAt f σ x) (heatAt f σ (flipCoord i x))}.indicator
+          (fun σ => |heatAt f σ (flipCoord i x) - heatAt f σ x|) := by
+    funext σ
+    rw [fluxTerm]
+    by_cases h : Real.exp u ∈ Set.uIoc (heatAt f σ x) (heatAt f σ (flipCoord i x))
+    · rw [Set.indicator_of_mem h, Set.indicator_of_mem (show σ ∈ {σ : ℝ |
+        Real.exp u ∈ Set.uIoc (heatAt f σ x) (heatAt f σ (flipCoord i x))} from h)]
+    · rw [Set.indicator_of_notMem h, Set.indicator_of_notMem (show σ ∉ {σ : ℝ |
+        Real.exp u ∈ Set.uIoc (heatAt f σ x) (heatAt f σ (flipCoord i x))} from h)]
+  rw [heq, intervalIntegrable_iff]
+  exact (intervalIntegrable_iff.1
+    ((hcb.sub hca).abs.intervalIntegrable a b)).indicator hTm
+
+private lemma intervalIntegrable_levelFlux (f : Cube n → ℝ) (u a b : ℝ) :
+    IntervalIntegrable (fun σ => levelFlux f σ u) volume a b := by
+  have h : (fun σ => levelFlux f σ u)
+      = fun σ => (∑ x : Cube n, ∑ i, fluxTerm f σ u x i) / 2 ^ n / 4 := by
+    funext σ; rw [levelFlux_eq_fluxTerm, unifE]
+  rw [h]
+  exact ((intervalIntegrable_finsum _ a b fun x =>
+    intervalIntegrable_finsum _ a b fun i =>
+      intervalIntegrable_fluxTerm_time f u x i a b).div_const _).div_const _
+
 /-- Level-mass dissipation: for fixed `u > 0`, on any `[s₁,s₂] ⊆ [0,∞)`,
 `levelExcess f s₂ u - levelExcess f s₁ u = -∫_{s₁}^{s₂} levelFlux f s u ds`
 (FTC with the finitely many crossing times as exceptional set). -/
@@ -486,7 +756,24 @@ lemma levelExcess_sub_eq (hf : ∀ x, 0 < f x) (hm : unifE f = 1) (u : ℝ)
     (hu : 0 < u) {s₁ s₂ : ℝ} (h1 : 0 ≤ s₁) (h12 : s₁ ≤ s₂) :
     levelExcess f s₂ u - levelExcess f s₁ u
       = -∫ s in s₁..s₂, levelFlux f s u := by
-  sorry
+  classical
+  have hZ := finite_crossing f hm hu
+  have hcont : ContinuousOn (fun σ => levelExcess f σ u) (Set.Icc s₁ s₂) := by
+    refine Continuous.continuousOn ?_
+    simp only [levelExcess, unifE]
+    exact (continuous_finset_sum _ fun x _ =>
+      ((continuous_heatAt f x).sub continuous_const).max continuous_const).div_const _
+  have hint : IntervalIntegrable (fun σ => -levelFlux f σ u) volume s₁ s₂ :=
+    (intervalIntegrable_levelFlux f u s₁ s₂).neg
+  have hkey := sub_eq_integral_of_finite_exceptions (u := fun σ => levelExcess f σ u)
+    (v := fun σ => -levelFlux f σ u) h12 hZ.toFinset hcont ?_ hint
+  · rw [hkey, intervalIntegral.integral_neg]
+  · intro t _ htZ
+    have hne : ∀ x : Cube n, heatAt f t x ≠ Real.exp u := by
+      intro x hx
+      exact htZ (hZ.mem_toFinset.2 ⟨x, hx⟩)
+    have hd := hasDerivAt_levelExcess f hne
+    rwa [unifE_indicator_cubeLap f hne] at hd
 
 /-- Consequence: the total flux over all time is at most the initial excess:
 `∫_{0}^{S} levelFlux f s u ds ≤ 1` for every `S ≥ 0`, `u > 0`. -/
