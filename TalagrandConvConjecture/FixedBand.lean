@@ -88,6 +88,100 @@ theorem term_V_tail_le {ℓ θ : ℝ} (hθ0 : 0 ≤ θ) (hθ : θ ≤ obsT) {x�
     _ = Real.exp (cLev - D.F θ x₀) := by
         rw [← Real.exp_add, ← sub_eq_add_neg]
 
+/-! ### The backward (terminal-value) extension of a test function
+
+`revFwdMat` is the transpose of the matrix of `revGen`; the terminal-value
+problem `∂_t g = -revGen g`, `g_{T_o} = φ` is therefore solved by reversing
+time in `exists_linFlow`, and the pairing `⟨ν_{T-t}, g_t⟩` is constant. -/
+
+/-- Summing `revFwdMat` against its *first* index reproduces the reverse
+generator: `∑_x revFwdMat_t(x,y)·g(x) = (L̃_t g)(y)`. -/
+lemma sum_revFwdMat_mul (t : ℝ) (g : Cube n → ℝ) (y : Cube n) :
+    ∑ x : Cube n, D.revFwdMat t x y * g x = D.revGen t g y := by
+  classical
+  have e1 : ∀ x : Cube n, D.revFwdMat t x y * g x
+      = (∑ i, if x = flipCoord i y then D.Y t i y / 2 * g x else 0)
+        - (if x = y then (∑ i, D.Y t i x / 2) * g x else 0) := by
+    intro x
+    rw [revFwdMat, sub_mul, Finset.sum_mul]
+    congr 1
+    · exact Finset.sum_congr rfl fun i _ => by
+        by_cases h : x = flipCoord i y <;> simp [h]
+    · by_cases h : x = y <;> simp [h]
+  rw [Finset.sum_congr rfl fun x _ => e1 x, Finset.sum_sub_distrib,
+    Finset.sum_comm]
+  have e2 : ∀ i : Fin n,
+      (∑ x : Cube n, if x = flipCoord i y then D.Y t i y / 2 * g x else 0)
+        = D.Y t i y / 2 * g (flipCoord i y) := fun i => by simp
+  have e3 : (∑ x : Cube n, if x = y then (∑ i, D.Y t i x / 2) * g x else 0)
+      = (∑ i, D.Y t i y / 2) * g y := by simp
+  rw [Finset.sum_congr rfl fun i _ => e2 i, e3, revGen, Finset.sum_mul,
+    ← Finset.sum_sub_distrib]
+  exact Finset.sum_congr rfl fun i _ => by ring
+
+/-- Continuity in `t` of the forward matrix entries on `(-∞, T]`. -/
+lemma continuousOn_revFwdMat (x x' : Cube n) :
+    ContinuousOn (fun t => D.revFwdMat t x x') (Set.Iic D.T) := by
+  classical
+  simp only [revFwdMat]
+  refine ContinuousOn.sub (continuousOn_finset_sum _ fun i _ => ?_) ?_
+  · by_cases h : x = flipCoord i x'
+    · simp only [if_pos h]
+      exact (D.continuousOn_Y i x').div_const 2
+    · simp only [if_neg h]; exact continuousOn_const
+  · by_cases h : x = x'
+    · simp only [if_pos h]
+      exact continuousOn_finset_sum _ fun i _ => (D.continuousOn_Y i x).div_const 2
+    · simp only [if_neg h]; exact continuousOn_const
+
+/-- Backward (terminal-value) extension: for every `φ` there is `g` on
+`[θ, T_o]` with `∂_t g_t = -L̃_t g_t` and `g_{T_o} = φ`. -/
+lemma exists_backFlow {θ : ℝ} (hθ : θ ≤ obsT) (φ : Cube n → ℝ) :
+    ∃ g : ℝ → Cube n → ℝ,
+      (∀ x, ContinuousOn (fun t => g t x) (Set.Icc θ obsT)) ∧
+      (∀ x, ∀ t ∈ Set.Icc θ obsT,
+        HasDerivWithinAt (fun t => g t x) (-(D.revGen t (g t) x))
+          (Set.Icc θ obsT) t) ∧
+      g obsT = φ := by
+  classical
+  have hmaps : Set.MapsTo (fun t => θ + obsT - t) (Set.Icc θ obsT)
+      (Set.Icc θ obsT) := fun t ht => ⟨by linarith [ht.2], by linarith [ht.1]⟩
+  have hmapsT : Set.MapsTo (fun t => θ + obsT - t) (Set.Icc θ obsT)
+      (Set.Iic D.T) := fun t ht => by
+    have := (hmaps ht).2
+    have h2 : obsT ≤ D.T := D.obsT_lt_T.le
+    exact le_trans this h2
+  have hcontσ : ContinuousOn (fun t : ℝ => θ + obsT - t) (Set.Icc θ obsT) := by
+    fun_prop
+  set A : ℝ → Cube n → Cube n → ℝ :=
+    fun t x x' => D.revFwdMat (θ + obsT - t) x' x with hA
+  have hAc : ∀ x x', ContinuousOn (fun t => A t x x') (Set.Icc θ obsT) :=
+    fun x x' => (D.continuousOn_revFwdMat x' x).comp hcontσ hmapsT
+  obtain ⟨w, hw, hw0⟩ := exists_linFlow A hθ hAc φ
+  refine ⟨fun t => w (θ + obsT - t), fun x => (hw.cont x).comp hcontσ hmaps,
+    ?_, ?_⟩
+  · intro x t ht
+    have hσ : HasDerivWithinAt (fun t : ℝ => θ + obsT - t) (-1)
+        (Set.Icc θ obsT) t := by
+      simpa using
+        (((hasDerivAt_const t (θ + obsT)).sub (hasDerivAt_id t)).hasDerivWithinAt
+          (s := Set.Icc θ obsT))
+    have hd := hw.deriv x (θ + obsT - t) (hmaps ht)
+    have key : HasDerivWithinAt (fun t => w (θ + obsT - t) x)
+        (matVec (A (θ + obsT - t)) (w (θ + obsT - t)) x * (-1))
+        (Set.Icc θ obsT) t := hd.comp t hσ hmaps
+    have harg : θ + obsT - (θ + obsT - t) = t := by ring
+    have hval : matVec (A (θ + obsT - t)) (w (θ + obsT - t)) x
+        = D.revGen t (w (θ + obsT - t)) x := by
+      simp only [hA, matVec, harg]
+      exact D.sum_revFwdMat_mul t (w (θ + obsT - t)) x
+    rw [hval, mul_neg_one] at key
+    exact key
+  · funext x
+    show w (θ + obsT - obsT) x = φ x
+    rw [show θ + obsT - obsT = θ from by ring]
+    exact congrFun hw0 x
+
 open Classical in
 /-- The `V`-terminal band mass over all starting points is the profile:
 `∑_{x₀} ν_{T-θ}(x₀)·𝔼_{x₀}[1_{F_{T_o}(V) ∈ I}] = 𝔄_{t_a}(I)`
@@ -97,7 +191,83 @@ theorem sum_term_V_eq_profile {ℓ θ : ℝ} (hθ0 : 0 ≤ θ) (hθ : θ ≤ obs
     ∑ x₀ : Cube n, D.startW θ x₀ * ∑ s : JSt n, (Φ x₀).term s *
         (if D.F obsT s.1 ∈ I then (1 : ℝ) else 0)
       = profile D.f D.tA I := by
-  sorry
+  classical
+  obtain ⟨g, hgc, hgd, hgT⟩ :=
+    D.exists_backFlow hθ (fun x => if D.F obsT x ∈ I then (1 : ℝ) else 0)
+  have hgTx : ∀ x : Cube n,
+      g obsT x = if D.F obsT x ∈ I then (1 : ℝ) else 0 := fun x => congrFun hgT x
+  -- the reverse law is a flow for `revFwdMat`
+  have hTle : ∀ t ∈ Set.Icc θ obsT, t ≤ D.T := fun t ht =>
+    le_trans ht.2 D.obsT_lt_T.le
+  have hν : IsLinFlow D.revFwdMat θ obsT (fun t => D.revDensity t) := by
+    refine ⟨fun x t ht => ?_, fun x t ht => ?_⟩
+    · exact ((D.hasDerivAt_revDensity (hTle t ht) x).continuousAt).continuousWithinAt
+    · exact (D.hasDerivAt_revDensity (hTle t ht) x).hasDerivWithinAt
+  -- the pairing has vanishing derivative
+  have hpair : ∀ t ∈ Set.Icc θ obsT,
+      HasDerivWithinAt (fun t => ∑ x : Cube n, D.revDensity t x * g t x) 0
+        (Set.Icc θ obsT) t := by
+    intro t ht
+    have h := hasDerivWithinAt_pairing hν ht (g := g)
+      (g' := fun x => -(D.revGen t (g t) x)) (fun x => hgd x t ht)
+    have e1 : ∑ x : Cube n, matVec (D.revFwdMat t) (D.revDensity t) x * g t x
+        = ∑ x : Cube n, D.revDensity t x * D.revGen t (g t) x := by
+      simp only [matVec, Finset.sum_mul]
+      rw [Finset.sum_comm]
+      refine Finset.sum_congr rfl fun x' _ => ?_
+      rw [← D.sum_revFwdMat_mul t (g t) x', Finset.mul_sum]
+      exact Finset.sum_congr rfl fun x _ => by ring
+    have e2 : ∑ x : Cube n, D.revDensity t x * (-(D.revGen t (g t) x))
+        = -∑ x : Cube n, D.revDensity t x * D.revGen t (g t) x := by
+      rw [← Finset.sum_neg_distrib]
+      exact Finset.sum_congr rfl fun x _ => by ring
+    have hzero : ∑ x : Cube n, (matVec (D.revFwdMat t) (D.revDensity t) x * g t x
+        + D.revDensity t x * (-(D.revGen t (g t) x))) = 0 := by
+      rw [Finset.sum_add_distrib, e1, e2, add_neg_cancel]
+    rwa [hzero] at h
+  -- hence it is constant
+  have hconst : ∑ x : Cube n, D.revDensity obsT x * g obsT x
+      = ∑ x : Cube n, D.revDensity θ x * g θ x := by
+    rcases eq_or_lt_of_le hθ with heq | hlt
+    · rw [heq]
+    · refine constant_of_derivWithin_zero
+        (fun t ht => (hpair t ht).differentiableWithinAt)
+        (fun t ht => (hpair t ⟨ht.1, ht.2.le⟩).derivWithin
+          (uniqueDiffOn_Icc hlt t ⟨ht.1, ht.2.le⟩))
+        obsT (Set.right_mem_Icc.2 hθ)
+  -- the left-hand side is the pairing at time `θ`
+  have hmarg : ∀ x₀ : Cube n,
+      ∑ s : JSt n, (Φ x₀).term s * (if D.F obsT s.1 ∈ I then (1 : ℝ) else 0)
+        = g θ x₀ := by
+    intro x₀
+    have h := D.cflow_V_marginal hθ0 hθ (Φ x₀) g hgc hgd
+    simpa only [hgTx] using h
+  have hL : ∑ x₀ : Cube n, D.startW θ x₀ * ∑ s : JSt n, (Φ x₀).term s *
+        (if D.F obsT s.1 ∈ I then (1 : ℝ) else 0)
+      = ∑ x₀ : Cube n, D.revDensity θ x₀ * g θ x₀ :=
+    Finset.sum_congr rfl fun x₀ _ => by rw [hmarg x₀]; rfl
+  -- and the pairing at time `T_o` is the profile
+  have hTsub : D.T - obsT = D.tA := by
+    show D.tA + obsT - obsT = D.tA
+    ring
+  have hterm : ∀ x : Cube n, D.revDensity obsT x * g obsT x
+      = I.indicator (fun _ => heatAt D.f D.tA x)
+          (Real.log (heatAt D.f D.tA x)) / 2 ^ n := by
+    intro x
+    have hF : D.F obsT x = Real.log (heatAt D.f D.tA x) := by
+      show Real.log (D.fs (D.T - obsT) x) = _
+      rw [hTsub]; rfl
+    have hd : D.revDensity obsT x = heatAt D.f D.tA x / 2 ^ n := by
+      show D.fs (D.T - obsT) x / 2 ^ n = _
+      rw [hTsub]; rfl
+    rw [hgTx, hF, hd]
+    by_cases h : Real.log (heatAt D.f D.tA x) ∈ I
+    · rw [if_pos h, Set.indicator_of_mem h]; ring
+    · rw [if_neg h, Set.indicator_of_notMem h]; ring
+  have hR : ∑ x : Cube n, D.revDensity obsT x * g obsT x = profile D.f D.tA I := by
+    rw [profile, unifE, Finset.sum_div]
+    exact Finset.sum_congr rfl fun x _ => hterm x
+  rw [hL, ← hconst, hR]
 
 /-- Vanishing of high bands: `𝔄_{t_a}((r,r+1]) = 0` once `r` exceeds
 `max_x log f_{t_a}(x)`. -/
