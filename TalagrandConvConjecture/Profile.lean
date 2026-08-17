@@ -56,15 +56,94 @@ section Positive
 
 variable {f : Cube n → ℝ}
 
+/-! ### Elementary facts about the heat flow at nonnegative times
+
+Everything below is used only for `0 ≤ s`; for `s < 0` the operator
+`T_ρ = smooth ρ` with `ρ = e^{-s} > 1` is *not* positivity preserving, so
+`heatAt f s` may take negative values even for `f > 0`. -/
+
+private lemma abs_exp_neg_le_one {s : ℝ} (hs : 0 ≤ s) : |Real.exp (-s)| ≤ 1 := by
+  rw [abs_of_pos (Real.exp_pos _)]
+  exact Real.exp_le_one_iff.mpr (neg_nonpos.mpr hs)
+
+/-- For `s ≥ 0` the heat flow of a strictly positive density stays strictly
+positive. -/
+lemma heatAt_pos (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s) (x : Cube n) :
+    0 < heatAt f s x :=
+  smooth_pos (abs_exp_neg_le_one hs) hf x
+
+/-- Mass conservation along the heat flow. -/
+lemma unifE_heatAt (f : Cube n → ℝ) (s : ℝ) : unifE (heatAt f s) = unifE f :=
+  unifE_smooth _ f
+
+@[simp] lemma heatAt_zero (f : Cube n → ℝ) : heatAt f 0 = f := by
+  simp [heatAt]
+
+lemma continuous_heatAt (f : Cube n → ℝ) (x : Cube n) :
+    Continuous fun s => heatAt f s x := continuous_smooth_exp f x
+
+/-- Crude pointwise bound: a positive density of mean one is at most `2^n`
+pointwise, and the same holds along the heat flow. -/
+lemma heatAt_le_pow (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ} (hs : 0 ≤ s)
+    (x : Cube n) : heatAt f s x ≤ 2 ^ n := by
+  have h2 : ((2 : ℝ) ^ n) ≠ 0 := by positivity
+  have h1 : unifE (heatAt f s) = 1 := by rw [unifE_heatAt, hm]
+  rw [unifE, div_eq_iff h2, one_mul] at h1
+  calc heatAt f s x ≤ ∑ y : Cube n, heatAt f s y :=
+        Finset.single_le_sum (fun y _ => (heatAt_pos hf hs y).le) (Finset.mem_univ x)
+    _ = 2 ^ n := h1
+
+private lemma unifE_sub (g h : Cube n → ℝ) :
+    unifE (fun x => g x - h x) = unifE g - unifE h := by
+  simp [unifE, Finset.sum_sub_distrib, sub_div]
+
+private lemma sum_inv_mul_eq_unifE (g : Cube n → ℝ) :
+    ∑ x : Cube n, ((2 : ℝ) ^ n)⁻¹ * g x = unifE g := by
+  rw [← Finset.mul_sum, unifE, div_eq_inv_mul]
+
+-- STATEMENT-ISSUE: `profile_nonneg` is FALSE as stated, because `s` is not
+-- restricted to `0 ≤ s` and `heatAt f s = smooth (e^{-s}) f` is not
+-- positivity preserving for `s < 0`.  Falsity witness: `n = 1`,
+-- `f 1 = 3/2`, `f (-1) = 1/2` (so `f > 0` and `unifE f = 1`); then
+-- `heatAt f s x = 1 + (1/2)·e^{-s}·toR (x 0)`, so at `s = -Real.log 4`
+-- the two values are `3` and `-1`.  With `I = {0}` we get
+-- `Real.log (-1) = Real.log 1 = 0 ∈ I` and `Real.log 3 ∉ I`, hence
+-- `profile f s I = (-1 + 0)/2 = -1/2 < 0`.
+-- The intended statement (with `0 ≤ s`) is `profile_nonneg'` below; every use
+-- in this file and downstream is at nonnegative times.
 /-- Profiles are nonnegative. -/
 lemma profile_nonneg (hf : ∀ x, 0 < f x) (s : ℝ) (I : Set ℝ) :
     0 ≤ profile f s I := by
   sorry
 
+/-- Profiles are nonnegative (correct form of `profile_nonneg`, with the
+missing hypothesis `0 ≤ s`). -/
+lemma profile_nonneg' (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s) (I : Set ℝ) :
+    0 ≤ profile f s I :=
+  unifE_nonneg fun x =>
+    Set.indicator_nonneg (fun _ _ => (heatAt_pos hf hs x).le) _
+
+-- STATEMENT-ISSUE: `profile_le_one` is FALSE as stated, for the same reason as
+-- `profile_nonneg` (no hypothesis `0 ≤ s`).  With the same witness
+-- (`n = 1`, `f 1 = 3/2`, `f (-1) = 1/2`, `s = -Real.log 4`, values `3` and
+-- `-1`) and `I = {Real.log 3}` we get `profile f s I = (3 + 0)/2 = 3/2 > 1`.
+-- The intended statement (with `0 ≤ s`) is `profile_le_one'` below.
 /-- Trivial mass bound: `𝔄_s(I) ≤ 𝔼_λ f_s = 1`. -/
 lemma profile_le_one (hf : ∀ x, 0 < f x) (hm : unifE f = 1) (s : ℝ)
     (I : Set ℝ) : profile f s I ≤ 1 := by
   sorry
+
+/-- Trivial mass bound `𝔄_s(I) ≤ 𝔼_λ f_s = 1` (correct form of
+`profile_le_one`, with the missing hypothesis `0 ≤ s`). -/
+lemma profile_le_one' (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
+    (hs : 0 ≤ s) (I : Set ℝ) : profile f s I ≤ 1 := by
+  have h1 : profile f s I ≤ unifE (heatAt f s) := by
+    refine unifE_mono fun x => ?_
+    by_cases hx : Real.log (heatAt f s x) ∈ I
+    · rw [Set.indicator_of_mem hx]
+    · rw [Set.indicator_of_notMem hx]
+      exact (heatAt_pos hf hs x).le
+  rwa [unifE_heatAt, hm] at h1
 
 /-- Entropy lower bound [C eq (entropy_vs_anti_concentration_profile)]:
 for `ℓ ≥ 2`, `ℓ·𝔄_s((ℓ,ℓ+1]) ≤ 2·Ent_λ(h_s)`. -/
@@ -121,7 +200,24 @@ theorem profile_window_integral_le :
 /-- Measurability in `s` of the profile (finite sum of continuous×indicator). -/
 lemma measurable_profile (hf : ∀ x, 0 < f x) (I : Set ℝ) (hI : MeasurableSet I) :
     Measurable fun s => profile f s I := by
-  sorry
+  have key : Measurable fun s => ∑ x : Cube n,
+      I.indicator (fun _ => heatAt f s x) (Real.log (heatAt f s x)) := by
+    refine Finset.measurable_sum _ fun x _ => ?_
+    have h1 : Measurable fun s => heatAt f s x := (continuous_heatAt f x).measurable
+    have h2 : MeasurableSet {s : ℝ | Real.log (heatAt f s x) ∈ I} :=
+      (Real.measurable_log.comp h1) hI
+    have heq : (fun s => I.indicator (fun _ => heatAt f s x) (Real.log (heatAt f s x)))
+        = {s : ℝ | Real.log (heatAt f s x) ∈ I}.indicator (fun s => heatAt f s x) := by
+      funext s
+      by_cases hs : Real.log (heatAt f s x) ∈ I
+      · rw [Set.indicator_of_mem hs,
+          Set.indicator_of_mem (show s ∈ {s : ℝ | Real.log (heatAt f s x) ∈ I} from hs)]
+      · rw [Set.indicator_of_notMem hs,
+          Set.indicator_of_notMem (show s ∉ {s : ℝ | Real.log (heatAt f s x) ∈ I} from hs)]
+    rw [heq]
+    exact h1.indicator h2
+  simp only [profile, unifE]
+  exact key.div_const _
 
 end Positive
 
