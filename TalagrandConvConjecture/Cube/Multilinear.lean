@@ -71,8 +71,7 @@ lemma sum_cubeKernel (z : Fin n → ℝ) : ∑ y : Cube n, cubeKernel z y = 1 :=
     intro y hy
     obtain ⟨j, hj⟩ : ∃ j, y j ≠ x j := by
       by_contra hcon
-      push_neg at hcon
-      exact hy (funext hcon)
+      exact hy (funext fun j => not_not.1 fun hne => hcon ⟨j, hne⟩)
     refine Finset.prod_eq_zero (Finset.mem_univ j) ?_
     show (1 + toR (x j) * toR (y j)) / 2 = 0
     rw [toR_mul_of_ne (Ne.symm hj)]
@@ -235,9 +234,10 @@ lemma mext_pos {f : Cube n → ℝ} {z : Fin n → ℝ} (hz : ∀ i, |z i| ≤ 1
     (hf : ∀ x, 0 < f x) : 0 < mext f z := by
   obtain ⟨y, hy⟩ : ∃ y : Cube n, 0 < cubeKernel z y := by
     by_contra hcon
-    push_neg at hcon
+    have hcon' : ∀ y : Cube n, cubeKernel z y ≤ 0 :=
+      fun y => not_lt.1 fun h => hcon ⟨y, h⟩
     have hzero : ∑ y : Cube n, cubeKernel z y = 0 :=
-      Finset.sum_eq_zero fun y _ => le_antisymm (hcon y) (cubeKernel_nonneg hz y)
+      Finset.sum_eq_zero fun y _ => le_antisymm (hcon' y) (cubeKernel_nonneg hz y)
     rw [sum_cubeKernel] at hzero
     exact one_ne_zero hzero
   rw [mext]
