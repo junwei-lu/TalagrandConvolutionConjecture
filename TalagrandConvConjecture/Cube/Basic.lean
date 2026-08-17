@@ -98,7 +98,24 @@ lemma sum_comp_mul_right (y : Cube n) (g : Cube n → ℝ) :
   Fintype.sum_bijective (· * y) (Group.mulRight_bijective y) _ _ (fun _ => rfl)
 
 @[simp] lemma card_cube : Fintype.card (Cube n) = 2 ^ n := by
-  sorry
+  simp [Fintype.card_units_int]
+
+/-- The two-element sum over `ℤˣ`: `∑_{u = ±1} g u = g 1 + g (-1)`. -/
+lemma sum_units_int {M : Type*} [AddCommMonoid M] (g : ℤˣ → M) :
+    ∑ u : ℤˣ, g u = g 1 + g (-1) := by
+  have h : (Finset.univ : Finset ℤˣ) = {1, -1} := by
+    ext u
+    simp only [Finset.mem_univ, Finset.mem_insert, Finset.mem_singleton, true_iff]
+    exact Int.units_eq_one_or u
+  rw [h, Finset.sum_insert (by decide), Finset.sum_singleton]
+
+/-- Two distinct signs have product `-1` in `ℝ`. -/
+lemma toR_mul_of_ne {u v : ℤˣ} (h : u ≠ v) : toR u * toR v = -1 := by
+  rcases Int.units_eq_one_or u with hu | hu <;> rcases Int.units_eq_one_or v with hv | hv <;>
+    subst hu <;> subst hv <;>
+      first
+        | exact absurd rfl h
+        | norm_num
 
 /-! ## Uniform expectation and uniform measure -/
 
