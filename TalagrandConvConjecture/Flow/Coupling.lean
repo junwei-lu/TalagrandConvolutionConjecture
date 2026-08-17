@@ -439,7 +439,7 @@ private lemma continuousOn_jrate {d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤ 1)
     (B : Set (Cube n)) (s s' : JSt n) {a b : ℝ} (hbT : b ≤ D.T) :
     ContinuousOn (fun t => D.jrate d B t s s') (Set.Icc a b) :=
   (D.continuousOn_jrateC hd0 hd1 B s s' hbT).congr
-    fun t ht => D.jrate_eq_jrateC hd0 B (le_trans ht.2 hbT) s s'
+    fun _ ht => D.jrate_eq_jrateC hd0 B (le_trans ht.2 hbT) s s'
 
 private lemma continuousOn_fwdOf {d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤ 1)
     (B : Set (Cube n)) {a b : ℝ} (hbT : b ≤ D.T) (s s' : JSt n) :
@@ -457,7 +457,7 @@ private lemma continuousOn_cellGen {ℓ θ d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤
       (Set.Icc (z k) (z (k + 1))) :=
   D.continuousOn_fwdOf hd0 hd1 _ hbT s s'
 
-private lemma jrate_nonneg {d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤ 1)
+private lemma jrate_nonneg {d : ℝ} (hd0 : 0 ≤ d) (_hd1 : d ≤ 1)
     (B : Set (Cube n)) {t : ℝ} (ht : t ≤ D.T) (s s' : JSt n) :
     0 ≤ D.jrate d B t s s' := by
   obtain ⟨x, y, b⟩ := s
@@ -931,7 +931,65 @@ theorem cflow_V_marginal (hθ0 : 0 ≤ θ) (hθ : θ ≤ obsT) (c : D.CFlow ℓ 
       HasDerivWithinAt (fun t => g t x) (-(D.revGen t (g t) x))
         (Set.Icc θ obsT) t) :
     ∑ s, c.term s * g obsT s.1 = g θ x₀ := by
-  sorry
+  classical
+  have hgrid := c.is.grid
+  have hK := hgrid.pos
+  have hcell : ∀ k, k < c.K → Set.Icc (c.z k) (c.z (k + 1)) ⊆ Set.Icc θ obsT := by
+    intro k hk u hu
+    exact ⟨le_trans (D.grid_theta_le hgrid (le_of_lt hk)) hu.1,
+      le_trans hu.2 (D.grid_le_obsT hgrid (Nat.succ_le_of_lt hk))⟩
+  -- cell-wise: the pairing is constant
+  have hu_cont : ∀ k, k < c.K →
+      ContinuousOn (fun t => ∑ s, c.π k t s * g t s.1)
+        (Set.Icc (c.z k) (c.z (k + 1))) := by
+    intro k hk
+    refine continuousOn_finset_sum _ fun s _ => ?_
+    exact ContinuousOn.mul ((c.is.glued.flow k hk).cont s)
+      ((hg_cont s.1).mono (hcell k hk))
+  have hu_deriv : ∀ k, k < c.K → ∀ t ∈ Set.Icc (c.z k) (c.z (k + 1)),
+      HasDerivWithinAt (fun t => ∑ s, c.π k t s * g t s.1) 0
+        (Set.Icc (c.z k) (c.z (k + 1))) t := by
+    intro k hk t ht
+    have hflow := c.is.glued.flow k hk
+    have hgd : ∀ s : JSt n, HasDerivWithinAt (fun t => g t s.1)
+        (-(D.revGen t (g t) s.1)) (Set.Icc (c.z k) (c.z (k + 1))) t :=
+      fun s => (hg_deriv s.1 t (hcell k hk ht)).mono (hcell k hk)
+    have hpair := hasDerivWithinAt_pairing hflow ht hgd
+    have hdual : ∑ s : JSt n,
+        matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s * g t s.1
+          = ∑ s : JSt n, c.π k t s * D.revGen t (g t) s.1 := by
+      simp only [cellGen]
+      rw [fwdOf_pairing_generic]
+      exact Finset.sum_congr rfl fun s _ =>
+        congrArg (fun r => c.π k t s * r) (D.jrate_pairing_state _ t s (g t))
+    have hzero : ∑ s : JSt n,
+        (matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s * g t s.1
+          + c.π k t s * -(D.revGen t (g t) s.1)) = 0 := by
+      rw [Finset.sum_add_distrib, hdual]
+      have h2 : ∑ s : JSt n, c.π k t s * -(D.revGen t (g t) s.1)
+          = -∑ s : JSt n, c.π k t s * D.revGen t (g t) s.1 := by
+        rw [← Finset.sum_neg_distrib]
+        exact Finset.sum_congr rfl fun s _ => by ring
+      rw [h2, add_neg_cancel]
+    simpa only [hzero] using hpair
+  -- node-wise: the transfers preserve the pairing
+  have hnode : ∀ k, k + 1 < c.K →
+      (∑ s, c.π (k + 1) (c.z (k + 1)) s * g (c.z (k + 1)) s.1)
+        = ∑ s, c.π k (c.z (k + 1)) s * g (c.z (k + 1)) s.1 := by
+    intro k hk
+    rw [c.is.glued.node k hk]
+    exact D.killTr_pairing ℓ (c.z (k + 1)) (c.π k (c.z (k + 1))) (g (c.z (k + 1)))
+  have hchain := chain_eq hK (z := c.z)
+    (u := fun k t => ∑ s, c.π k t s * g t s.1) (φ := fun _ _ => 0)
+    hgrid.mono hu_cont hu_deriv (fun k _ => intervalIntegrable_const) hnode
+  simp only [intervalIntegral.integral_zero, Finset.sum_const_zero, add_zero] at hchain
+  rw [hgrid.last] at hchain
+  simp only [Dat.CFlow.term]
+  rw [hchain, c.is.glued.init, D.killTr_pairing, hgrid.first]
+  simp only [initVec, ite_mul, zero_mul, one_mul]
+  rw [Finset.sum_ite_eq' Finset.univ ((x₀, x₀, true) : JSt n)
+    (fun s => g θ s.1)]
+  simp
 
 end Dat
 
