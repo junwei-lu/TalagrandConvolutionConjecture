@@ -174,9 +174,7 @@ private lemma cross_ind_eq (r : ℝ) (s : JSt n) :
   · rw [if_pos h1, if_neg h2, if_pos ⟨h1, not_lt.mp h2⟩, if_neg fun h => h2 h.1]
     ring
   · rw [if_neg h1, if_pos h2, if_neg fun h => h1 h.1, if_pos ⟨h2, not_lt.mp h1⟩]
-    ring
   · rw [if_neg h1, if_neg h2, if_neg fun h => h1 h.1, if_neg fun h => h2 h.1]
-    ring
 
 /-- `W ∈ band ℓ` splits into the `j = 0` crossing event and the event that
 `V` has already escaped above `ℓ+1`. -/
