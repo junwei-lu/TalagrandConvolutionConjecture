@@ -738,7 +738,48 @@ downstream: alive terminal mass satisfies `F_{T_o}(x) ≤ ℓ+1`. -/
 theorem cflow_alive_support (hθ : θ ≤ obsT) (c : D.CFlow ℓ θ x₀)
     (x y : Cube n) (h : ℓ + 1 < D.F obsT x) :
     c.term (x, y, true) = 0 := by
-  sorry
+  classical
+  obtain ⟨j, hjK⟩ : ∃ j, c.K = j + 1 := ⟨c.K - 1, by have := c.is.grid.pos; omega⟩
+  have hjlt : j < c.K := by omega
+  have hd0 := D.dbar_nonneg ℓ θ x₀
+  have hd1 : D.dbar ℓ θ x₀ ≤ 1 := by
+    have := D.dbar_lt_half ℓ θ x₀; linarith
+  have hzmono : c.z j ≤ c.z (j + 1) := c.is.grid.mono j hjlt
+  have hlast : c.z (j + 1) = obsT := by rw [← hjK]; exact c.is.grid.last
+  have hzT : c.z (j + 1) ≤ D.T := by
+    rw [hlast]; exact le_of_lt D.obsT_lt_T
+  -- the starting value of the last cell is cleared on the barrier at the node
+  have hinit : ∀ s : JSt n, s.2.2 = true →
+      s.1 ∈ D.barrier ℓ ((c.z j + c.z (j + 1)) / 2) → c.π j (c.z j) s = 0 := by
+    intro s hs1 hs2
+    have hsB : s.1 ∈ D.barrier ℓ (c.z j) :=
+      D.barrier_mid_subset c.is.grid hjlt hs2
+    rcases Nat.eq_zero_or_pos j with hj0 | hjpos
+    · subst hj0
+      rw [c.is.glued.init]
+      exact D.killTr_kills _ hs1 hsB
+    · obtain ⟨m, rfl⟩ : ∃ m, j = m + 1 := ⟨j - 1, by omega⟩
+      rw [c.is.glued.node m (by omega)]
+      exact D.killTr_kills _ hs1 hsB
+  have hinv := D.cell_alive_zero hd0 hd1 hzmono hzT (c.is.glued.flow j hjlt) hinit
+  -- the terminal state is in the last cell's barrier
+  have hxB : x ∈ D.barrier ℓ ((c.z j + c.z (j + 1)) / 2) := by
+    by_contra hcon
+    simp only [barrier, Set.mem_setOf_eq, not_le] at hcon
+    have hmid2 : (c.z j + c.z (j + 1)) / 2 ≤ obsT := by rw [← hlast]; linarith
+    obtain ⟨cc, hcc, hcc2⟩ := D.exists_cross hmid2 (le_of_lt D.obsT_lt_T) x
+      (Or.inl ⟨hcon, h.le⟩)
+    have hne1 : (c.z j + c.z (j + 1)) / 2 < cc :=
+      lt_of_le_of_ne hcc.1 (by intro hEq; rw [← hEq] at hcc2; linarith)
+    have hne2 : cc < obsT :=
+      lt_of_le_of_ne hcc.2 (by intro hEq; rw [hEq] at hcc2; linarith)
+    exact c.is.grid.nocross j hjlt cc
+      ⟨by linarith, by rw [hlast]; exact hne2⟩ x hcc2
+  have hterm : c.term = c.π j obsT := by
+    simp only [Dat.CFlow.term, hjK, Nat.add_sub_cancel]
+  rw [hterm]
+  exact hinv obsT ⟨by rw [← hlast]; exact hzmono, le_of_eq hlast.symm⟩
+    (x, y, true) rfl hxB
 
 /-- The `V`-marginal of the coupling flow is the plain reverse flow: for
 every sector-blind, `y`-blind test `g` the terminal pairing is transport of
