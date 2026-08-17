@@ -1202,10 +1202,10 @@ private lemma intervalIntegral_sqrt_mul_le {F G : ℝ → ℝ} {a b : ℝ}
 
 /-- Weighted Cauchy–Schwarz: `∑ p·√u·√v ≤ √(∑ p u)·√(∑ p v)`. -/
 private lemma weighted_cs {ι : Type*} (s : Finset ι) (p u v : ι → ℝ)
-    (hp : ∀ i ∈ s, 0 ≤ p i) :
+    (hp : ∀ i ∈ s, 0 ≤ p i) (hu : ∀ i ∈ s, 0 ≤ u i) (hv : ∀ i ∈ s, 0 ≤ v i) :
     ∑ i ∈ s, p i * (Real.sqrt (u i) * Real.sqrt (v i))
       ≤ Real.sqrt (∑ i ∈ s, p i * u i) * Real.sqrt (∑ i ∈ s, p i * v i) := by
-  by_cases hall : ∀ i ∈ s, 0 ≤ u i ∧ 0 ≤ v i
+  have hall : ∀ i ∈ s, 0 ≤ u i ∧ 0 ≤ v i := fun i hi => ⟨hu i hi, hv i hi⟩
   · have h := sum_le_sqrt_mul_sqrt s
       (fun i => Real.sqrt (p i) * Real.sqrt (u i))
       (fun i => Real.sqrt (p i) * Real.sqrt (v i))
@@ -1231,14 +1231,6 @@ private lemma weighted_cs {ι : Type*} (s : Finset ι) (p u v : ι → ℝ)
     rw [Finset.sum_congr rfl e1, Finset.sum_congr rfl e2,
       Finset.sum_congr rfl e3] at h
     exact h
-  · push_neg at hall
-    obtain ⟨i₀, hi₀, hneg⟩ := hall
-    exact absurd hneg (by
-      push_neg
-      intro hu
-      by_contra hv
-      push_neg at hv
-      exact absurd hu (not_le.mpr (by linarith [hv])) |>.elim) |>.elim
 
 /-! #### Continuity toolbox (all in `t`, on closed cells below `T_o`) -/
 
@@ -1463,6 +1455,8 @@ private lemma abs_pertPair_le (B : Finset (Cube n)) {ℓ θ : ℝ}
       ≤ Real.sqrt (∑ s : JSt n, p s * ∑ i, D.Sc t i s.1 ^ 2)
         * Real.sqrt (∑ s : JSt n, p s * D.Gam φ t s.1 s.2.1) :=
     weighted_cs Finset.univ p _ _ (fun s _ => hp0 s)
+      (fun s _ => Finset.sum_nonneg fun i _ => sq_nonneg _)
+      (fun s _ => D.Gam_nonneg htB φ s.1 s.2.1)
   -- step 5: identify/dominate the two factors
   have hfac1 : (∑ s : JSt n, p s * ∑ i, D.Sc t i s.1 ^ 2) = D.scInt c k t := by
     refine Finset.sum_congr rfl fun s _ => ?_
