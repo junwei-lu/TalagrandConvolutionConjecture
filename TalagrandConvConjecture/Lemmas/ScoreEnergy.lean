@@ -378,6 +378,35 @@ private lemma jrate_expand {d : ℝ} (B : Set (Cube n)) (t : ℝ) (x y : Cube n)
       exact ⟨hb, rfl, rfl, hY, rfl⟩
   · rfl
 
+/-- **Generator duality** for the forward matrix of an out-rate table (local
+copy). -/
+private lemma fwdOf_pairing_generic' (q : JSt n → JSt n → ℝ) (v w : JSt n → ℝ) :
+    ∑ s, matVec (fwdOf q) v s * w s
+      = ∑ s, v s * (∑ s', q s s' * (w s' - w s)) := by
+  classical
+  have hL : ∀ s : JSt n, matVec (fwdOf q) v s * w s
+      = (∑ s' : JSt n, q s' s * v s' * w s)
+        - (∑ s'' : JSt n, q s s'') * v s * w s := by
+    intro s
+    simp only [matVec, fwdOf, Finset.sum_mul, sub_mul, ite_mul, zero_mul]
+    rw [Finset.sum_sub_distrib]
+    congr 1
+    rw [Finset.sum_ite_eq]
+    simp
+  have e1 : ∑ s : JSt n, ∑ s' : JSt n, q s' s * v s' * w s
+      = ∑ s : JSt n, ∑ s' : JSt n, q s s' * v s * w s' :=
+    Finset.sum_comm (s := Finset.univ) (t := Finset.univ)
+      (f := fun (a b : JSt n) => q b a * v b * w a)
+  have e2 : ∑ s : JSt n, (∑ s'' : JSt n, q s s'') * v s * w s
+      = ∑ s : JSt n, ∑ s' : JSt n, q s s' * v s * w s := by
+    refine Finset.sum_congr rfl fun s _ => ?_
+    rw [Finset.sum_mul, Finset.sum_mul]
+  rw [Finset.sum_congr rfl fun s _ => hL s, Finset.sum_sub_distrib, e1, e2,
+    ← Finset.sum_sub_distrib]
+  refine Finset.sum_congr rfl fun s _ => ?_
+  rw [Finset.mul_sum, ← Finset.sum_sub_distrib]
+  exact Finset.sum_congr rfl fun s' _ => by ring
+
 /-- Dead-sector jumps leave the sector test unchanged. -/
 private lemma jump_dead {d : ℝ} (B : Set (Cube n)) (t : ℝ) (x y : Cube n)
     (Gf : JSt n → ℝ) (cst : ℝ) (hGd : ∀ x' y' : Cube n, Gf (x', y', false) = cst) :
@@ -465,7 +494,324 @@ theorem scoreEnergy_le {ℓ θ : ℝ} (hℓ : 0 < ℓ) (hθ0 : obsT - 1 ≤ θ)
     D.scoreEnergy c
       ≤ (kappa D.a - 1) / Real.log (kappa D.a)
         * (D.Rgap ℓ θ x₀ + 1 + Real.log (kappa D.a)) := by
-  sorry
+  classical
+  have hκ : 1 < kappa D.a := one_lt_kappa D.ha0 D.ha1
+  have hLpos : 0 < Real.log (kappa D.a) := Real.log_pos hκ
+  have hκ1 : (0 : ℝ) < kappa D.a - 1 := by linarith
+  have hgrid := c.is.grid
+  have hK : 0 < c.K := hgrid.pos
+  have hd0 : 0 ≤ D.dbar ℓ θ x₀ := D.dbar_nonneg ℓ θ x₀
+  have hd1 : D.dbar ℓ θ x₀ ≤ 1 := by have := D.dbar_lt_half ℓ θ x₀; linarith
+  have hzobs : ∀ j, j ≤ c.K → c.z j ≤ obsT := D.grid_le_obsT hgrid
+  have hzT : ∀ j, j ≤ c.K → c.z j ≤ D.T := fun j hj =>
+    le_trans (hzobs j hj) (le_of_lt D.obsT_lt_T)
+  have hcellobs : ∀ k, k < c.K → ∀ t ∈ Set.Icc (c.z k) (c.z (k + 1)), t ≤ obsT :=
+    fun k hk t ht => le_trans ht.2 (hzobs (k + 1) (Nat.succ_le_of_lt hk))
+  -- the sector test `G`
+  set G : ℝ → JSt n → ℝ := fun t s =>
+    if s.2.2 then D.F t s.1 else ℓ + 1 + Real.log (kappa D.a) with hGdef
+  have hGtrue : ∀ (t : ℝ) (s : JSt n), s.2.2 = true → G t s = D.F t s.1 := by
+    intro t s h; simp [hGdef, h]
+  have hGfalse : ∀ (t : ℝ) (s : JSt n), s.2.2 = false →
+      G t s = ℓ + 1 + Real.log (kappa D.a) := by
+    intro t s h; simp [hGdef, h]
+  have hGa : ∀ (t : ℝ) (x' y' : Cube n), G t (x', y', true) = D.F t x' :=
+    fun t x' y' => hGtrue t _ rfl
+  have hGd : ∀ (t : ℝ) (x' y' : Cube n),
+      G t (x', y', false) = ℓ + 1 + Real.log (kappa D.a) :=
+    fun t x' y' => hGfalse t _ rfl
+  -- in-cell alive support
+  have hinv : ∀ k, k < c.K → ∀ t ∈ Set.Icc (c.z k) (c.z (k + 1)), ∀ s : JSt n,
+      s.2.2 = true → s.1 ∈ D.barrier ℓ ((c.z k + c.z (k + 1)) / 2) →
+      c.π k t s = 0 := by
+    intro k hk
+    refine D.cell_alive_zero' hd0 hd1 (hzT (k + 1) (Nat.succ_le_of_lt hk))
+      (c.is.glued.flow k hk) (fun t ht s => D.cflow_nonneg hθ c hk ht s) ?_
+    intro s hs1 hs2
+    have hsB : s.1 ∈ D.barrier ℓ (c.z k) :=
+      D.cell_F_ge hgrid hk (hzT (k + 1) (Nat.succ_le_of_lt hk)) hs2
+        (Set.left_mem_Icc.mpr (hgrid.mono k hk))
+    rcases Nat.eq_zero_or_pos k with hk0 | hkpos
+    · subst hk0
+      rw [c.is.glued.init]
+      exact D.killTr_kills' _ hs1 hsB
+    · obtain ⟨m, rfl⟩ : ∃ m, k = m + 1 := ⟨k - 1, by omega⟩
+      rw [c.is.glued.node m (by omega)]
+      exact D.killTr_kills' _ hs1 hsB
+  have hFle : ∀ k, k < c.K → ∀ t ∈ Set.Icc (c.z k) (c.z (k + 1)), ∀ s : JSt n,
+      s.2.2 = true → c.π k t s ≠ 0 → D.F t s.1 ≤ ℓ + 1 := by
+    intro k hk t ht s hs1 hs2
+    refine D.cell_F_le hgrid hk (hzT (k + 1) (Nat.succ_le_of_lt hk)) ?_ ht
+    intro hmem
+    exact hs2 (hinv k hk t ht s hs1 hmem)
+  -- continuity and derivative of the test
+  have hGcont : ∀ k, k < c.K → ∀ s : JSt n,
+      ContinuousOn (fun t => G t s) (Set.Icc (c.z k) (c.z (k + 1))) := by
+    intro k hk s
+    by_cases hb : s.2.2 = true
+    · have he : (fun t => G t s) = fun t => D.F t s.1 := by
+        funext t; exact hGtrue t s hb
+      rw [he]
+      exact (D.continuousOn_F s.1).mono
+        (fun t ht => le_trans ht.2 (hzT (k + 1) (Nat.succ_le_of_lt hk)))
+    · have hb' : s.2.2 = false := by simpa using hb
+      have he : (fun t => G t s) = fun _ => ℓ + 1 + Real.log (kappa D.a) := by
+        funext t; exact hGfalse t s hb'
+      rw [he]
+      exact continuousOn_const
+  have hGderiv : ∀ k, k < c.K → ∀ t ∈ Set.Icc (c.z k) (c.z (k + 1)), ∀ s : JSt n,
+      HasDerivWithinAt (fun t => G t s)
+        (if s.2.2 = true then ∑ i, D.Sc t i s.1 else 0)
+        (Set.Icc (c.z k) (c.z (k + 1))) t := by
+    intro k hk t ht s
+    have htT : t ≤ D.T := le_trans (hcellobs k hk t ht) (le_of_lt D.obsT_lt_T)
+    by_cases hb : s.2.2 = true
+    · rw [if_pos hb]
+      have he : (fun t => G t s) = fun t => D.F t s.1 := by
+        funext τ; exact hGtrue τ s hb
+      rw [he]
+      exact (D.hasDerivAt_F htT s.1).hasDerivWithinAt
+    · rw [if_neg hb]
+      have hb' : s.2.2 = false := by simpa using hb
+      have he : (fun t => G t s) = fun _ => ℓ + 1 + Real.log (kappa D.a) := by
+        funext τ; exact hGfalse τ s hb'
+      rw [he]
+      exact hasDerivWithinAt_const _ _ _
+  -- cell-wise pairing derivative and its lower bound
+  have hpair : ∀ k, k < c.K → ∀ t ∈ Set.Icc (c.z k) (c.z (k + 1)),
+      HasDerivWithinAt (fun t => ∑ s : JSt n, c.π k t s * G t s)
+        (∑ s : JSt n,
+          (matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s * G t s
+            + c.π k t s * (if s.2.2 = true then ∑ i, D.Sc t i s.1 else 0)))
+        (Set.Icc (c.z k) (c.z (k + 1))) t := fun k hk t ht =>
+    hasDerivWithinAt_pairing (c.is.glued.flow k hk) ht (hGderiv k hk t ht)
+  have hbound : ∀ k, k < c.K → ∀ t ∈ Set.Icc (c.z k) (c.z (k + 1)),
+      Real.log (kappa D.a) / (kappa D.a - 1) *
+        (∑ s : JSt n, (if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0))
+      ≤ ∑ s : JSt n,
+          (matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s * G t s
+            + c.π k t s * (if s.2.2 = true then ∑ i, D.Sc t i s.1 else 0)) := by
+    intro k hk t ht
+    have htobs : t ≤ obsT := hcellobs k hk t ht
+    have hπ0 : ∀ s : JSt n, 0 ≤ c.π k t s := fun s => D.cflow_nonneg hθ c hk ht s
+    have hdual : ∑ s : JSt n,
+        matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s * G t s
+        = ∑ s : JSt n, c.π k t s * (∑ s' : JSt n,
+            D.jrate (D.dbar ℓ θ x₀) (D.barrier ℓ ((c.z k + c.z (k + 1)) / 2)) t s s'
+              * (G t s' - G t s)) := by
+      simp only [cellGen]
+      exact fwdOf_pairing_generic' _ _ _
+    rw [Finset.sum_add_distrib, hdual, ← Finset.sum_add_distrib, Finset.mul_sum]
+    refine Finset.sum_le_sum fun s _ => ?_
+    by_cases hb : s.2.2 = true
+    · rw [if_pos hb, if_pos hb]
+      have hseq : s = ((s.1, s.2.1, true) : JSt n) :=
+        Prod.ext_iff.mpr ⟨rfl, Prod.ext_iff.mpr ⟨rfl, hb⟩⟩
+      by_cases hπ : c.π k t s = 0
+      · rw [hπ]; simp
+      · have hFx : D.F t s.1 ≤ ℓ + 1 := hFle k hk t ht s hb hπ
+        have hjump := D.jump_alive (d := D.dbar ℓ θ x₀)
+          (D.barrier ℓ ((c.z k + c.z (k + 1)) / 2)) htobs s.1 s.2.1 (G t)
+          (hGa t) (hGd t) hFx
+        rw [← hseq] at hjump
+        have hstep : Real.log (kappa D.a) / (kappa D.a - 1) * (∑ i, D.Sc t i s.1 ^ 2)
+            ≤ (∑ i, D.Y t i s.1 * Real.log (D.Y t i s.1) / 2) + ∑ i, D.Sc t i s.1 := by
+          rw [Finset.mul_sum, ← Finset.sum_add_distrib]
+          refine Finset.sum_le_sum fun i _ => ?_
+          have hsc := score_convexity hκ (D.kappa_inv_le_Y htobs i s.1)
+            (D.Y_le_kappa htobs i s.1)
+          simp only [Dat.Sc]
+          rw [div_mul_eq_mul_div, div_le_iff₀ hκ1]
+          nlinarith [hsc]
+        have h1 := mul_le_mul_of_nonneg_left hstep (hπ0 s)
+        have h2 := mul_le_mul_of_nonneg_left hjump (hπ0 s)
+        nlinarith [h1, h2]
+    · have hb' : s.2.2 = false := by simpa using hb
+      rw [if_neg hb, if_neg hb]
+      have hseq : s = ((s.1, s.2.1, false) : JSt n) :=
+        Prod.ext_iff.mpr ⟨rfl, Prod.ext_iff.mpr ⟨rfl, hb'⟩⟩
+      have h0 := D.jump_dead (d := D.dbar ℓ θ x₀)
+        (D.barrier ℓ ((c.z k + c.z (k + 1)) / 2)) t s.1 s.2.1 (G t)
+        (ℓ + 1 + Real.log (kappa D.a)) (hGd t)
+      rw [← hseq] at h0
+      rw [h0]
+      simp
+  -- node transfers increase the pairing
+  have hkt : ∀ (τ : ℝ) (s s' : JSt n), D.killTr ℓ τ s s'
+      = if s = (s'.1, s'.2.1, (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ τ))) then 1
+        else 0 := by
+    intro τ s s'
+    obtain ⟨x, y, b⟩ := s
+    obtain ⟨x', y', b'⟩ := s'
+    simp only [killTr, Prod.mk.injEq]
+  have htr : ∀ (τ : ℝ) (v : JSt n → ℝ) (h : JSt n → ℝ),
+      ∑ s : JSt n, matVec (D.killTr ℓ τ) v s * h s
+        = ∑ s' : JSt n, v s' *
+            h (s'.1, s'.2.1, (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ τ))) := by
+    intro τ v h
+    have hcol : ∀ s' : JSt n, ∑ s : JSt n, D.killTr ℓ τ s s' * h s
+        = h (s'.1, s'.2.1, (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ τ))) := by
+      intro s'
+      simp only [hkt τ, ite_mul, one_mul, zero_mul]
+      simp
+    simp only [matVec, Finset.sum_mul]
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl fun s' _ => ?_
+    have hre : ∀ s : JSt n, D.killTr ℓ τ s s' * v s' * h s
+        = v s' * (D.killTr ℓ τ s s' * h s) := fun s => by ring
+    rw [Finset.sum_congr rfl fun s _ => hre s, ← Finset.mul_sum, hcol s']
+  have hnode : ∀ k, k + 1 < c.K →
+      (∑ s : JSt n, c.π k (c.z (k + 1)) s * G (c.z (k + 1)) s)
+        ≤ ∑ s : JSt n, c.π (k + 1) (c.z (k + 1)) s * G (c.z (k + 1)) s := by
+    intro k hk
+    have hkK : k < c.K := by omega
+    have hmem : c.z (k + 1) ∈ Set.Icc (c.z k) (c.z (k + 1)) :=
+      Set.right_mem_Icc.mpr (hgrid.mono k hkK)
+    rw [c.is.glued.node k hk,
+      htr (c.z (k + 1)) (c.π k (c.z (k + 1))) (G (c.z (k + 1)))]
+    refine Finset.sum_le_sum fun s _ => ?_
+    have hπ0 : 0 ≤ c.π k (c.z (k + 1)) s := D.cflow_nonneg hθ c hkK hmem s
+    by_cases hb : s.2.2 = true
+    · by_cases hbar : s.1 ∈ D.barrier ℓ (c.z (k + 1))
+      · rw [show (s.2.2 && decide (s.1 ∉ D.barrier ℓ (c.z (k + 1)))) = false by
+            simp [hbar], hGd, hGtrue _ s hb]
+        by_cases hπ : c.π k (c.z (k + 1)) s = 0
+        · rw [hπ]; simp
+        · have hFx : D.F (c.z (k + 1)) s.1 ≤ ℓ + 1 :=
+            hFle k hkK (c.z (k + 1)) hmem s hb hπ
+          exact mul_le_mul_of_nonneg_left (by linarith) hπ0
+      · rw [show (s.2.2 && decide (s.1 ∉ D.barrier ℓ (c.z (k + 1)))) = true by
+            simp [hbar, hb], hGa, hGtrue _ s hb]
+    · have hb' : s.2.2 = false := by simpa using hb
+      rw [show (s.2.2 && decide (s.1 ∉ D.barrier ℓ (c.z (k + 1)))) = false by
+          simp [hb'], hGd, hGfalse _ s hb']
+  -- endpoints
+  have hstartval : ∑ s : JSt n, c.π 0 (c.z 0) s * G (c.z 0) s
+      = G (c.z 0) (x₀, x₀, decide (x₀ ∉ D.barrier ℓ (c.z 0))) := by
+    rw [c.is.glued.init, htr (c.z 0) (initVec x₀) (G (c.z 0))]
+    simp only [initVec, ite_mul, zero_mul, one_mul]
+    simp
+  have hstart : ℓ - D.Rgap ℓ θ x₀ ≤ ∑ s : JSt n, c.π 0 (c.z 0) s * G (c.z 0) s := by
+    rw [hstartval]
+    have hz0 : c.z 0 = θ := hgrid.first
+    by_cases hx : x₀ ∈ D.barrier ℓ (c.z 0)
+    · rw [show (decide (x₀ ∉ D.barrier ℓ (c.z 0))) = false by simp [hx], hGd]
+      have := D.Rgap_nonneg ℓ θ x₀
+      linarith
+    · rw [show (decide (x₀ ∉ D.barrier ℓ (c.z 0))) = true by simp [hx], hGa, hz0]
+      have hR : ℓ - D.F θ x₀ ≤ D.Rgap ℓ θ x₀ := le_max_left _ _
+      linarith
+  have hend : (∑ s : JSt n, c.π (c.K - 1) (c.z c.K) s * G (c.z c.K) s)
+      ≤ ℓ + 1 + Real.log (kappa D.a) := by
+    obtain ⟨j, hjK⟩ : ∃ j, c.K = j + 1 := ⟨c.K - 1, by omega⟩
+    have hjlt : j < c.K := by omega
+    have hlast : c.z (j + 1) = obsT := by rw [← hjK]; exact hgrid.last
+    have hmem : obsT ∈ Set.Icc (c.z j) (c.z (j + 1)) := by
+      refine ⟨?_, le_of_eq hlast.symm⟩
+      rw [← hlast]; exact hgrid.mono j hjlt
+    have hKj : c.K - 1 = j := by omega
+    rw [hKj, hgrid.last]
+    have hmass : ∑ s : JSt n, c.π j obsT s = 1 := D.cflow_mass hθ c hjlt hmem
+    have hle : ∀ s : JSt n, c.π j obsT s * G obsT s
+        ≤ c.π j obsT s * (ℓ + 1 + Real.log (kappa D.a)) := by
+      intro s
+      have hπ0 : 0 ≤ c.π j obsT s := D.cflow_nonneg hθ c hjlt hmem s
+      by_cases hb : s.2.2 = true
+      · by_cases hπ : c.π j obsT s = 0
+        · rw [hπ]; simp
+        · have hterm : c.term s = c.π j obsT s := by
+            simp only [Dat.CFlow.term, hKj]
+          have hF : D.F obsT s.1 ≤ ℓ + 1 := by
+            by_contra hcon
+            push_neg at hcon
+            have hseq : s = ((s.1, s.2.1, true) : JSt n) :=
+              Prod.ext_iff.mpr ⟨rfl, Prod.ext_iff.mpr ⟨rfl, hb⟩⟩
+            have hz := D.cflow_alive_support hθ c s.1 s.2.1 hcon
+            rw [← hseq, hterm] at hz
+            exact hπ hz
+          rw [hGtrue _ s hb]
+          exact mul_le_mul_of_nonneg_left (by linarith [hLpos]) hπ0
+      · have hb' : s.2.2 = false := by simpa using hb
+        rw [hGfalse _ s hb']
+    calc ∑ s : JSt n, c.π j obsT s * G obsT s
+        ≤ ∑ s : JSt n, c.π j obsT s * (ℓ + 1 + Real.log (kappa D.a)) :=
+          Finset.sum_le_sum fun s _ => hle s
+      _ = ℓ + 1 + Real.log (kappa D.a) := by
+          rw [← Finset.sum_mul, hmass, one_mul]
+  -- chaining
+  have hucont : ∀ k, k < c.K →
+      ContinuousOn (fun t => -(∑ s : JSt n, c.π k t s * G t s))
+        (Set.Icc (c.z k) (c.z (k + 1))) := by
+    intro k hk
+    refine ContinuousOn.neg (continuousOn_finset_sum _ fun s _ => ?_)
+    exact ContinuousOn.mul ((c.is.glued.flow k hk).cont s) (hGcont k hk s)
+  have hψcont : ∀ k, k < c.K → ContinuousOn (fun t => ∑ s : JSt n,
+      (if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0))
+      (Set.Icc (c.z k) (c.z (k + 1))) := by
+    intro k hk
+    refine continuousOn_finset_sum _ fun s _ => ?_
+    by_cases hb : s.2.2 = true
+    · have he : (fun t => if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0)
+          = fun t => c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 := by
+        funext t; rw [if_pos hb]
+      rw [he]
+      refine ContinuousOn.mul ((c.is.glued.flow k hk).cont s) ?_
+      refine continuousOn_finset_sum _ fun i _ => ?_
+      have hYc : ContinuousOn (fun t => D.Y t i s.1)
+          (Set.Icc (c.z k) (c.z (k + 1))) :=
+        (D.continuousOn_Y i s.1).mono
+          (fun t ht => le_trans ht.2 (hzT (k + 1) (Nat.succ_le_of_lt hk)))
+      simp only [Dat.Sc]
+      exact ((continuousOn_const.sub hYc).div_const 2).pow 2
+    · have he : (fun t => if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0)
+          = fun _ => (0 : ℝ) := by
+        funext t; rw [if_neg hb]
+      rw [he]
+      exact continuousOn_const
+  have hchain := chain_le (K := c.K) hK (z := c.z)
+    (u := fun k t => -(∑ s : JSt n, c.π k t s * G t s))
+    (φ := fun k t => -(Real.log (kappa D.a) / (kappa D.a - 1) *
+      ∑ s : JSt n, (if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0)))
+    hgrid.mono hucont
+    (fun k hk t ht => ⟨-(∑ s : JSt n,
+        (matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s * G t s
+          + c.π k t s * (if s.2.2 = true then ∑ i, D.Sc t i s.1 else 0))),
+      by linarith [hbound k hk t ht], (hpair k hk t ht).neg⟩)
+    (fun k hk => by
+      refine ContinuousOn.intervalIntegrable ?_
+      rw [Set.uIcc_of_le (hgrid.mono k hk)]
+      exact (continuousOn_const.mul (hψcont k hk)).neg)
+    (fun k hk => by linarith [hnode k hk])
+  -- identify the integral term with the score energy
+  have hintk : ∀ k, (∫ t in c.z k..c.z (k + 1),
+        -(Real.log (kappa D.a) / (kappa D.a - 1) *
+          ∑ s : JSt n, (if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0)))
+      = -(Real.log (kappa D.a) / (kappa D.a - 1) *
+          ∫ t in c.z k..c.z (k + 1), ∑ s : JSt n,
+            (if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0)) := by
+    intro k
+    rw [intervalIntegral.integral_neg, intervalIntegral.integral_const_mul]
+  have hsum : (∑ k ∈ Finset.range c.K, ∫ t in c.z k..c.z (k + 1),
+        -(Real.log (kappa D.a) / (kappa D.a - 1) *
+          ∑ s : JSt n, (if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0)))
+      = -(Real.log (kappa D.a) / (kappa D.a - 1) * D.scoreEnergy c) := by
+    simp only [hintk]
+    rw [Finset.sum_neg_distrib]
+    congr 1
+    simp only [scoreEnergy]
+    rw [Finset.mul_sum]
+  simp only at hchain
+  rw [hsum] at hchain
+  have hfinal : Real.log (kappa D.a) / (kappa D.a - 1) * D.scoreEnergy c
+      ≤ D.Rgap ℓ θ x₀ + 1 + Real.log (kappa D.a) := by
+    linarith [hchain, hstart, hend]
+  have hstep := mul_le_mul_of_nonneg_left hfinal (le_of_lt (div_pos hκ1 hLpos))
+  have hid : (kappa D.a - 1) / Real.log (kappa D.a) *
+      (Real.log (kappa D.a) / (kappa D.a - 1) * D.scoreEnergy c)
+      = D.scoreEnergy c := by
+    field_simp
+  rw [hid] at hstep
+  exact hstep
 
 /-- **Stopped score energy, localized form** [LGF eq (3.5)] with explicit
 constant `α² = 25`: for `A ⊆ ℰ_θ`,
