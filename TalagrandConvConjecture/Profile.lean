@@ -21,6 +21,25 @@ Proof skeleton [C §3.5]:
 * discrete coarea: `𝔈(√h_s,√h_s) ≲ ∫_{ℓ-1}^{ℓ+2} levelFlux f s u du`;
 * `s ↦ levelExcess f s u` is nonincreasing with derivative `-levelFlux` off
   finitely many crossing times, and `levelExcess ≤ 1`; integrate and Fubini.
+
+## Deviation: the missing hypothesis `0 ≤ s`
+
+Four statements in this file quantify over *all* real times `s`, but the heat
+flow `heatAt f s = smooth (e^{-s}) f` is positivity preserving only for
+`0 ≤ s` (for `s < 0` the correlation `e^{-s}` exceeds `1` and `T_ρ` is not a
+Markov operator). `profile_nonneg`, `profile_le_one` and `profile_le_ent` are
+therefore **false as stated**; explicit falsity witnesses are recorded in
+`-- STATEMENT-ISSUE` comments above each of them, and they are left as `sorry`
+rather than silently restated. `dirichlet_le_flux_integral`'s proof
+([C, proof of Lemma 4]) also requires `f_s > 0`.
+
+The four corrected forms `profile_nonneg'`, `profile_le_one'`,
+`profile_le_ent'` and `dirichlet_le_flux_integral'` carry the extra hypothesis
+`0 ≤ s` and are fully proved; every use of the profile machinery — here and in
+[LGF §3] — is at nonnegative times, so the main results of this file
+(`levelExcess_sub_eq`, `flux_time_integral_le_one`, `profile_time_integral_le`,
+`profile_window_integral_le`, `measurable_profile`) are proved from them with
+their original statements unchanged.
 -/
 
 namespace Talagrand
@@ -489,9 +508,14 @@ lemma dirichlet_le_flux_integral' (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s)
 -- `√(h_s) = ψ_ℓ(log f_s)`, which requires `f_s > 0`; for `s < 0` the flow
 -- `heatAt f s` takes negative values (see the witness recorded above
 -- `profile_nonneg`) and `√(h_s)` is no longer of this form, so the proof
--- breaks down.  We have not determined whether the inequality happens to
--- remain true for `s < 0`.  The intended statement (with `0 ≤ s`) is
--- `dirichlet_le_flux_integral'` above, which is proved.
+-- breaks down: at a point with `f_s(x) < 0` one has `√(h_s x) = 0` while
+-- `ψ_ℓ(log (f_s x)) ≠ 0`, so `sqrtTest_sq_diff_le` no longer applies to the
+-- edge difference.  Unlike the three statements above we have no counterexample
+-- (a sign-by-sign computation suggests the inequality does survive, since the
+-- flux integral over an edge with `f_s(x) > 0 > f_s(σ_i x)` already dominates
+-- `f_s(x)·χ(log f_s(x) - ℓ)²`), but the [C] argument only gives `0 ≤ s`.
+-- The intended statement (with `0 ≤ s`) is `dirichlet_le_flux_integral'`
+-- above, which is proved.
 /-- Coarea comparison [C eq (claim_dirichlet_comparison)] with our constants:
 `𝔼_λ ∑_i (Δ_i √h_s)² ≤ 256·∫_{ℓ-1}^{ℓ+2} levelFlux f s u du`. -/
 lemma dirichlet_le_flux_integral (hf : ∀ x, 0 < f x) (s ℓ : ℝ) :
