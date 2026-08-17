@@ -60,7 +60,14 @@ theorem weighted_comparison_localized {ℓ θ : ℝ} (hℓ : 0 < ℓ) (hθ0 : 0 
     ∑ x₀ ∈ A, D.startW θ x₀ *
         ∑ s, D.NW ℓ θ x₀ obsT s * (Φ x₀).term s * h s.2.1
       ≤ ∑ x₀ ∈ A, D.startW θ x₀ * ∑ s, (Φ x₀).term s * h s.1 := by
-  sorry
+  refine Finset.sum_le_sum fun x₀ _ => ?_
+  have hTθ : 0 ≤ D.T - θ := by have := D.obsT_lt_T; linarith
+  have hw : 0 ≤ D.startW θ x₀ := by
+    have := D.fs_pos hTθ x₀
+    simp only [startW, revDensity]
+    positivity
+  exact mul_le_mul_of_nonneg_left
+    (D.weighted_comparison hℓ hθ0 hθ (Φ x₀) h hh) hw
 
 /-- Pointwise lower bound for the terminal weight on the crossing event
 [LGF, proof of Lemma 3.4]: for `x₀ ∈ ℰ_θ` and a terminal state `s` with
@@ -71,7 +78,41 @@ theorem NW_ge_on_crossing {ℓ θ : ℝ} {x₀ : Cube n}
     (hx₀ : x₀ ∈ D.activeF ℓ θ) {s : JSt n} {j : ℝ} (hj : 0 ≤ j)
     (hW : ℓ + j < D.F obsT s.2.1) (hV : D.F obsT s.1 ≤ ℓ + 1) :
     Real.exp (alphaC + j - 1) ≤ D.NW ℓ θ x₀ obsT s := by
-  sorry
+  classical
+  set d := D.dbar ℓ θ x₀ with hd_def
+  set R := D.Rgap ℓ θ x₀ with hR_def
+  have hR : 2 * alphaC ≤ R := by
+    simpa [activeF, Finset.mem_filter, hR_def] using hx₀
+  have hact : x₀ ∈ D.activeSet ℓ θ := hR
+  have halpha : (0 : ℝ) < alphaC := by norm_num [alphaC]
+  have hRpos : 0 < R := lt_of_lt_of_le (by linarith) hR
+  -- on the active set the positive part is attained
+  have hFθ : D.F θ x₀ = ℓ - R := by
+    have h1 : 0 < ℓ - D.F θ x₀ := by
+      rcases lt_max_iff.mp (hR_def ▸ hRpos) with h | h
+      · exact h
+      · exact absurd h (lt_irrefl 0)
+    have : R = ℓ - D.F θ x₀ := by
+      rw [hR_def, Rgap]; exact max_eq_left h1.le
+    linarith
+  have hdR : d * (R + 1) = alphaC := D.dbar_mul_Rgap_add_one hact
+  have hd0 : 0 ≤ d := D.dbar_nonneg ℓ θ x₀
+  have hd1 : d < 1 / 2 := D.dbar_lt_half ℓ θ x₀
+  rw [NW]
+  split
+  · -- alive sector
+    refine Real.exp_le_exp.2 ?_
+    have h1 : (1 - d) * D.F obsT s.1 ≤ (1 - d) * (ℓ + 1) :=
+      mul_le_mul_of_nonneg_left hV (by linarith)
+    have key : (1 - d) * (ℓ + 1) + d * (ℓ - R) = ℓ + 1 - alphaC := by
+      rw [← hdR]; ring
+    rw [hFθ]
+    linarith
+  · -- dead sector
+    refine Real.exp_le_exp.2 ?_
+    have key : d * (ℓ + 1 - (ℓ - R)) = alphaC := by rw [← hdR]; ring
+    rw [hFθ]
+    linarith
 
 end Dat
 
