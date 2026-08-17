@@ -177,21 +177,12 @@ lemma F_flipCoord_sub_of_le {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (x : Cube n) 
   simp only [F, Y]
   rw [Real.log_div (D.fs_ne_zero (D.T_sub_nonneg ht) _) (D.fs_ne_zero (D.T_sub_nonneg ht) _)]
 
--- STATEMENT-ISSUE: as stated (for *every* `t : ℝ`) this lemma is false; it
--- needs `t ≤ D.T`, which is exactly `F_flipCoord_sub_of_le` above (proved, and
--- used everywhere in this development).  For `t > D.T` the heat parameter
--- `ρ = e^{-(T-t)}` exceeds `1`, the multilinear extension `f_{T-t}` may vanish,
--- and both sides degenerate differently because `Real.log 0 = 0`.
--- Falsity witness: `n = 1`, `a` arbitrary, `f 1 = 1/2`, `f (-1) = 3/2`
--- (so `f > 0` and `unifE f = 1`).  At `ρ = 2`, i.e. `t = D.T + log 2`, one has
---   `f_{T-t} x = (1+2)/2·(1/2) + (1-2)/2·(3/2) = 0` at `x = (1)`, while
---   `f_{T-t} (σ x) = (1-2)/2·(1/2) + (1+2)/2·(3/2) = 2`.
--- Then LHS `= log 2 - log 0 = log 2 ≠ 0`, whereas
--- `Y = 2 / 0 = 0` so RHS `= log 0 = 0`.
-/-- `F_t(σ_i x) - F_t(x) = log Y_i(t,x)`. -/
-lemma F_flipCoord_sub (t : ℝ) (i : Fin n) (x : Cube n) :
-    D.F t (flipCoord i x) - D.F t x = Real.log (D.Y t i x) := by
-  sorry
+-- STATEMENT REPAIR (laptop adjudication): the unguarded `F_flipCoord_sub`
+-- (stated for every `t : ℝ`) was FALSE — for `t > T` the parameter
+-- `ρ = e^{-(T-t)}` exceeds `1`, the extension `f_{T-t}` can vanish, and the
+-- two sides disagree through the junk value `Real.log 0 = 0` (witness: `n=1`,
+-- `f 1 = 1/2`, `f (-1) = 3/2`, `ρ = 2`). The refuted form has been deleted;
+-- `F_flipCoord_sub_of_le` above (with the necessary `t ≤ T`) is canonical.
 
 /-! ## Heat-flow derivative identities -/
 
