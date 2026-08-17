@@ -32,7 +32,7 @@ private lemma term_index {ℓ θ : ℝ} {x₀ : Cube n} (c : D.CFlow ℓ θ x₀
   have hk : c.K - 1 < c.K := Nat.sub_lt hpos Nat.one_pos
   have hsucc : c.K - 1 + 1 = c.K := Nat.succ_pred_eq_of_pos hpos
   have hlast : c.z (c.K - 1 + 1) = obsT := by rw [hsucc]; exact c.is.grid.last
-  refine ⟨hk, Set.mem_Icc.mpr ⟨?_, le_of_eq hlast⟩⟩
+  refine ⟨hk, Set.mem_Icc.mpr ⟨?_, hlast.ge⟩⟩
   have hmono := c.is.grid.mono _ hk
   rw [← hlast]; exact hmono
 
@@ -146,18 +146,16 @@ private noncomputable def hiFin (r : ℝ) : Finset (Cube n) :=
 
 private lemma ind_bandFin (r : ℝ) (w : Cube n) :
     (if w ∈ D.bandFin r then (1 : ℝ) else 0) = D.bandW r w := by
-  unfold bandFin bandW
   by_cases h : D.F obsT w ∈ Set.Ioc r (r + 1)
-  · rw [if_pos h, if_pos (Finset.mem_filter.mpr ⟨Finset.mem_univ w, h⟩)]
-  · rw [if_neg h, if_neg fun hm => h (Finset.mem_filter.mp hm).2]
+  · simp [bandFin, bandW, h]
+  · simp [bandFin, bandW, h]
 
 private lemma ind_hiFin (r : ℝ) (w : Cube n) :
     (if w ∈ D.hiFin r then (1 : ℝ) else 0)
       = (if r < D.F obsT w then (1 : ℝ) else 0) := by
-  unfold hiFin
   by_cases h : r < D.F obsT w
-  · rw [if_pos h, if_pos (Finset.mem_filter.mpr ⟨Finset.mem_univ w, h⟩)]
-  · rw [if_neg h, if_neg fun hm => h (Finset.mem_filter.mp hm).2]
+  · simp [hiFin, h]
+  · simp [hiFin, h]
 
 /-- Add/subtract the both-in-`B` mass: the signed test discrepancy for the
 tail `B = {F > r}` equals the difference of the two one-sided crossing
@@ -172,7 +170,6 @@ private lemma cross_ind_eq (r : ℝ) (s : JSt n) :
       if_neg fun h => absurd h1 (not_lt.mpr h.2)]
     ring
   · rw [if_pos h1, if_neg h2, if_pos ⟨h1, not_lt.mp h2⟩, if_neg fun h => h2 h.1]
-    ring
   · rw [if_neg h1, if_pos h2, if_neg fun h => h1 h.1, if_pos ⟨h2, not_lt.mp h1⟩]
   · rw [if_neg h1, if_neg h2, if_neg fun h => h1 h.1, if_neg fun h => h2 h.1]
 
