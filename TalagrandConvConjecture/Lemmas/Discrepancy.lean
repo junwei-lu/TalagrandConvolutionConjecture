@@ -1173,21 +1173,26 @@ private lemma intervalIntegral_sqrt_mul_le {F G : ℝ → ℝ} {a b : ℝ}
         (hFi.const_mul lam) (hGi.div_const lam),
         intervalIntegral.integral_const_mul, intervalIntegral.integral_div]
     have hbound : (lam * IF + IG / lam) / 2 ≤ Real.sqrt ((IF + ε) * (IG + ε)) := by
-      have hlam_sq : lam ^ 2 = (IG + ε) / (IF + ε) :=
-        Real.sq_sqrt (div_nonneg hIGε.le hIFε.le)
-      have h1 : lam * (IF + ε) = Real.sqrt ((IF + ε) * (IG + ε)) := by
-        rw [hlam, ← Real.sqrt_sq hIFε.le, ← Real.sqrt_mul (sq_nonneg _)]
-        congr 1
+      have hFs : Real.sqrt (IF + ε) ^ 2 = IF + ε := Real.sq_sqrt hIFε.le
+      have hGs : Real.sqrt (IG + ε) ^ 2 = IG + ε := Real.sq_sqrt hIGε.le
+      have hFpos : 0 < Real.sqrt (IF + ε) := Real.sqrt_pos.mpr hIFε
+      have hGpos : 0 < Real.sqrt (IG + ε) := Real.sqrt_pos.mpr hIGε
+      have hsm : Real.sqrt ((IF + ε) * (IG + ε))
+          = Real.sqrt (IF + ε) * Real.sqrt (IG + ε) := Real.sqrt_mul hIFε.le _
+      have hlam2 : lam = Real.sqrt (IG + ε) / Real.sqrt (IF + ε) := by
+        rw [hlam, show (IG + ε) / (IF + ε)
+            = (Real.sqrt (IG + ε) / Real.sqrt (IF + ε)) ^ 2 by
+          rw [div_pow, hFs, hGs]]
+        exact Real.sqrt_sq (by positivity)
+      have h1 : lam * (IF + ε) = Real.sqrt (IF + ε) * Real.sqrt (IG + ε) := by
+        rw [hlam2]
         field_simp
-        ring
-      have h2 : (IG + ε) / lam = Real.sqrt ((IF + ε) * (IG + ε)) := by
-        rw [eq_comm, div_eq_iff hlam0.ne', hlam,
-          ← Real.sqrt_sq hIGε.le, ← Real.sqrt_mul_self hIFε.le]
-        rw [← Real.sqrt_mul (mul_self_nonneg _), ← Real.sqrt_mul
-          (mul_nonneg hIFε.le hIGε.le)]
-        congr 1
-        field_simp
-        ring
+        linear_combination Real.sqrt (IG + ε) * hFs
+      have h2 : (IG + ε) / lam = Real.sqrt (IF + ε) * Real.sqrt (IG + ε) := by
+        rw [hlam2]
+        rw [div_div_eq_mul_div]
+        rw [div_eq_iff hGpos.ne']
+        linear_combination Real.sqrt (IF + ε) * hGs
       have hle1 : lam * IF ≤ lam * (IF + ε) :=
         mul_le_mul_of_nonneg_left (by linarith) hlam0.le
       have hle2 : IG / lam ≤ (IG + ε) / lam := by
@@ -1196,7 +1201,7 @@ private lemma intervalIntegral_sqrt_mul_le {F G : ℝ → ℝ} {a b : ℝ}
         simpa [div_eq_mul_inv] using h
       calc (lam * IF + IG / lam) / 2
           ≤ (lam * (IF + ε) + (IG + ε) / lam) / 2 := by linarith
-        _ = Real.sqrt ((IF + ε) * (IG + ε)) := by rw [h1, h2]; ring
+        _ = Real.sqrt ((IF + ε) * (IG + ε)) := by rw [h1, h2, hsm]; ring
     calc (∫ t in a..b, Real.sqrt (F t) * Real.sqrt (G t))
         ≤ (lam * IF + IG / lam) / 2 := le_of_le_of_eq hint hval
       _ ≤ Real.sqrt ((IF + ε) * (IG + ε)) := hbound
@@ -1580,7 +1585,7 @@ private lemma abs_DtestF_le (B : Finset (Cube n)) {ℓ θ : ℝ}
             * Real.sqrt (∫ t in c.z k..c.z (k + 1),
                 ∑ s : JSt n, c.π k t s * D.Gam φ t s.1 s.2.1)) := by
           refine mul_le_mul_of_nonneg_left ?_ (mul_nonneg hCst0 hd0)
-          exact D.intervalIntegral_sqrt_mul_le hzk hsc hgc
+          exact intervalIntegral_sqrt_mul_le hzk hsc hgc
             (fun t ht => D.scInt_nonneg hθ c hk ht)
             (fun t ht => D.gamInt_nonneg φ hθ c hk ht)
   -- sum the cells: Duhamel + discrete Cauchy–Schwarz
