@@ -1,4 +1,5 @@
 import TalagrandConvConjecture.Lemmas.Quantities
+import TalagrandConvConjecture.Lemmas.ScoreEnergy
 
 /-!
 # Localized total variation distance [LGF Lemma 3.3]
@@ -1185,14 +1186,11 @@ private lemma intervalIntegral_sqrt_mul_le {F G : ℝ → ℝ} {a b : ℝ}
           rw [div_pow, hFs, hGs]]
         exact Real.sqrt_sq (by positivity)
       have h1 : lam * (IF + ε) = Real.sqrt (IF + ε) * Real.sqrt (IG + ε) := by
-        rw [hlam2]
-        field_simp
-        linear_combination Real.sqrt (IG + ε) * hFs
+        rw [hlam2, div_mul_eq_mul_div, div_eq_iff hFpos.ne']
+        linear_combination (-Real.sqrt (IG + ε)) * Real.mul_self_sqrt hIFε.le
       have h2 : (IG + ε) / lam = Real.sqrt (IF + ε) * Real.sqrt (IG + ε) := by
-        rw [hlam2]
-        rw [div_div_eq_mul_div]
-        rw [div_eq_iff hGpos.ne']
-        linear_combination Real.sqrt (IF + ε) * hGs
+        rw [hlam2, div_div_eq_mul_div, div_eq_iff hGpos.ne']
+        linear_combination (-Real.sqrt (IF + ε)) * Real.mul_self_sqrt hIGε.le
       have hle1 : lam * IF ≤ lam * (IF + ε) :=
         mul_le_mul_of_nonneg_left (by linarith) hlam0.le
       have hle2 : IG / lam ≤ (IG + ε) / lam := by
@@ -2117,8 +2115,174 @@ private lemma abs_pertQ_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
               simp only [pwt, if_pos hs]
             rw [hpwt, mul_one]
             ring
-    · sorry
-  sorry
+    · -- `V`-only branch (`Y ≥ 1`)
+      have hY' : 1 ≤ D.Y t i x := not_lt.mp hY
+      have hs : ¬ (0 < D.Sc t i x) := by
+        simp only [Sc]; push_neg; linarith
+      rw [if_neg hY]
+      rcases eq_or_lt_of_le hY' with hY1 | hY1
+      · have hSc : D.Sc t i x = 0 := by simp only [Sc, ← hY1]; ring
+        have hz : D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀) = 0 := by
+          rw [← hY1, Real.one_rpow]; ring
+        rw [hSc, hz]
+        simp
+      · have hcoef : -((D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) / 2)
+            = powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) * D.Sc t i x := by
+          simp only [Sc]
+          rw [rpow_sub_eq hY1]
+          ring
+        have hHflip : ∀ ζ : Cube n, D.Hlik t ζ (flipCoord i x)
+            = D.Hlik t ζ x * D.pwt t i x ζ := by
+          intro ζ
+          have hY0 : D.Y t i x ≠ 0 := ne_of_gt hYpos
+          have h0 : D.Hlik t ζ x ≠ 0 := (D.Hlik_pos htT ζ x).ne'
+          simp only [pwt, if_neg hs]
+          rw [← D.Hlik_flipCoord_mul_Y htT i ζ x]
+          field_simp
+        have hpwt0 : ∀ ζ : Cube n, 0 ≤ D.pwt t i x ζ := by
+          intro ζ
+          simp only [pwt, if_neg hs]
+          exact div_nonneg (D.lam_pos ht i x ζ).le hYpos.le
+        have hdiff : D.Qtest φ t (flipCoord i x) (flipCoord i y)
+              - D.Qtest φ t (flipCoord i x) y
+            = ∑ ζ : Cube n, D.Hlik t ζ x * (D.pwt t i x ζ *
+                ((D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                    + D.qB φ t ζ (flipCoord i x) y) *
+                  (-2 * (D.aB t * toR (y i)
+                      - D.bB t * toR (x i) * toR (y i) * toR (ζ i))
+                    * dmext φ i (D.mB t x y ζ)))) := by
+          rw [Qtest, Qtest, ← Finset.sum_sub_distrib]
+          refine Finset.sum_congr rfl fun ζ _ => ?_
+          rw [← mul_sub, hHflip ζ]
+          have hfac : D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+                - D.qB φ t ζ (flipCoord i x) y ^ 2
+              = (D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                  + D.qB φ t ζ (flipCoord i x) y) *
+                (D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                  - D.qB φ t ζ (flipCoord i x) y) := by ring
+          rw [mul_assoc, hfac, D.qB_flip_y_flip_x_sub φ t ζ x y i]
+        rw [hcoef, hdiff, abs_mul, mul_comm
+          |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| |D.Sc t i x|, mul_assoc]
+        refine mul_le_mul_of_nonneg_left ?_ (abs_nonneg _)
+        have hperζ : ∀ ζ : Cube n,
+            |D.Hlik t ζ x * (D.pwt t i x ζ *
+              ((D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                  + D.qB φ t ζ (flipCoord i x) y) *
+                (-2 * (D.aB t * toR (y i)
+                    - D.bB t * toR (x i) * toR (y i) * toR (ζ i))
+                  * dmext φ i (D.mB t x y ζ))))|
+              ≤ D.Hlik t ζ x * (D.pwt t i x ζ *
+                (2 * (2 * (D.aB t + D.bB t)
+                  * |dmext φ i (D.mB t x y ζ)|))) := by
+          intro ζ
+          have hH := D.Hlik_nonneg htT.le ζ x
+          have hq1 := hq01 ζ (flipCoord i x) (flipCoord i y)
+          have hq2 := hq01 ζ (flipCoord i x) y
+          have hsum2 : |D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+              + D.qB φ t ζ (flipCoord i x) y| ≤ 2 := by
+            rw [abs_of_nonneg (by linarith [hq1.1, hq2.1])]
+            linarith [hq1.2, hq2.2]
+          have hpc : |D.aB t * toR (y i)
+              - D.bB t * toR (x i) * toR (y i) * toR (ζ i)| ≤ D.aB t + D.bB t := by
+            have h := D.abs_pcf_le ht i x y ζ
+            simpa only [pcf, if_neg hs] using h
+          rw [abs_mul, abs_of_nonneg hH, abs_mul, abs_of_nonneg (hpwt0 ζ)]
+          refine mul_le_mul_of_nonneg_left ?_ hH
+          refine mul_le_mul_of_nonneg_left ?_ (hpwt0 ζ)
+          calc |(D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                + D.qB φ t ζ (flipCoord i x) y) *
+              (-2 * (D.aB t * toR (y i)
+                  - D.bB t * toR (x i) * toR (y i) * toR (ζ i))
+                * dmext φ i (D.mB t x y ζ))|
+              = |D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                  + D.qB φ t ζ (flipCoord i x) y| *
+                (2 * |D.aB t * toR (y i)
+                    - D.bB t * toR (x i) * toR (y i) * toR (ζ i)|
+                  * |dmext φ i (D.mB t x y ζ)|) := by
+                rw [abs_mul, abs_mul, abs_mul]
+                norm_num
+            _ ≤ 2 * (2 * (D.aB t + D.bB t) * |dmext φ i (D.mB t x y ζ)|) := by
+                have hd2 : (0:ℝ) ≤ |dmext φ i (D.mB t x y ζ)| := abs_nonneg _
+                have hm0 : (0:ℝ) ≤ |D.aB t * toR (y i)
+                    - D.bB t * toR (x i) * toR (y i) * toR (ζ i)| := abs_nonneg _
+                nlinarith [abs_nonneg (D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                  + D.qB φ t ζ (flipCoord i x) y)]
+        calc |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| *
+              |∑ ζ : Cube n, D.Hlik t ζ x * (D.pwt t i x ζ *
+                ((D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+                    + D.qB φ t ζ (flipCoord i x) y) *
+                  (-2 * (D.aB t * toR (y i)
+                      - D.bB t * toR (x i) * toR (y i) * toR (ζ i))
+                    * dmext φ i (D.mB t x y ζ))))|
+            ≤ |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| *
+              ∑ ζ : Cube n, D.Hlik t ζ x * (D.pwt t i x ζ *
+                (2 * (2 * (D.aB t + D.bB t)
+                  * |dmext φ i (D.mB t x y ζ)|))) := by
+              refine mul_le_mul_of_nonneg_left ?_ (abs_nonneg _)
+              exact le_trans (Finset.abs_sum_le_sum_abs _ _)
+                (Finset.sum_le_sum fun ζ _ => hperζ ζ)
+          _ = 2 * D.pgm φ ℓ θ t x₀ i x y := by
+              rw [pgm, Finset.mul_sum, Finset.mul_sum]
+              refine Finset.sum_congr rfl fun ζ _ => ?_
+              have habsmul : |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)
+                  * D.pwt t i x ζ|
+                  = |powerRatio (D.dbar ℓ θ x₀) (D.Y t i x)| * D.pwt t i x ζ := by
+                rw [abs_mul, abs_of_nonneg (hpwt0 ζ)]
+              rw [habsmul]
+              ring
+  -- (E') assemble: `ℓ¹`–`ℓ²` and the extracted engine
+  have hE1 : |D.pertQ φ ℓ θ x₀ t x y|
+      ≤ 2 * ∑ i, |D.Sc t i x| * D.pgm φ ℓ θ t x₀ i x y := by
+    refine le_trans (Finset.abs_sum_le_sum_abs _ _) ?_
+    rw [Finset.mul_sum]
+    refine Finset.sum_le_sum fun i _ => ?_
+    have h := hB i
+    calc |(if D.Y t i x < 1 then
+          (1 - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 *
+            (D.Qtest φ t x (flipCoord i y) - D.Qtest φ t x y)
+        else
+          -((D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) / 2) *
+            (D.Qtest φ t (flipCoord i x) (flipCoord i y)
+              - D.Qtest φ t (flipCoord i x) y))|
+        ≤ |D.Sc t i x| * (2 * D.pgm φ ℓ θ t x₀ i x y) := h
+      _ = 2 * (|D.Sc t i x| * D.pgm φ ℓ θ t x₀ i x y) := by ring
+  have hE2 : ∑ i, |D.Sc t i x| * D.pgm φ ℓ θ t x₀ i x y
+      ≤ Real.sqrt (∑ i, D.Sc t i x ^ 2)
+        * Real.sqrt (∑ i, D.pgm φ ℓ θ t x₀ i x y ^ 2) := by
+    have h := sum_le_sqrt_mul_sqrt Finset.univ (fun i => |D.Sc t i x|)
+      (fun i => D.pgm φ ℓ θ t x₀ i x y)
+      (fun i _ => abs_nonneg _)
+      (fun i _ => D.pgm_nonneg ht htT.le φ x₀ i x y)
+    have e1 : ∀ i : Fin n, |D.Sc t i x| ^ 2 = D.Sc t i x ^ 2 :=
+      fun i => sq_abs _
+    rw [Finset.sum_congr rfl fun i _ => e1 i] at h
+    exact h
+  have hE3 : Real.sqrt (∑ i, D.pgm φ ℓ θ t x₀ i x y ^ 2)
+      ≤ Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a * D.dbar ℓ θ x₀
+        * Real.sqrt (D.Gam φ t x y) := by
+    have h8k : (0 : ℝ) ≤ 8 * kappa D.a := by linarith
+    have hA1 : (0 : ℝ) ≤ 8 * kappa D.a * Lam D.a ^ 2 := mul_nonneg h8k (sq_nonneg _)
+    have hA2 : (0 : ℝ) ≤ 8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2 :=
+      mul_nonneg hA1 (sq_nonneg _)
+    have hsqrt : Real.sqrt (8 * kappa D.a * Lam D.a ^ 2 * D.dbar ℓ θ x₀ ^ 2
+          * D.Gam φ t x y)
+        = Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a * D.dbar ℓ θ x₀
+          * Real.sqrt (D.Gam φ t x y) := by
+      rw [Real.sqrt_mul hA2, Real.sqrt_mul hA1, Real.sqrt_mul h8k,
+        Real.sqrt_mul (by norm_num : (0 : ℝ) ≤ 8), Real.sqrt_sq hLam0,
+        Real.sqrt_sq hd0]
+    rw [← hsqrt]
+    exact Real.sqrt_le_sqrt (D.pgm_sq_sum_le ht φ x₀ x y)
+  calc |D.pertQ φ ℓ θ x₀ t x y|
+      ≤ 2 * ∑ i, |D.Sc t i x| * D.pgm φ ℓ θ t x₀ i x y := hE1
+    _ ≤ 2 * (Real.sqrt (∑ i, D.Sc t i x ^ 2)
+          * Real.sqrt (∑ i, D.pgm φ ℓ θ t x₀ i x y ^ 2)) := by
+        have := hE2; linarith
+    _ ≤ 2 * (Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a * D.dbar ℓ θ x₀
+          * Real.sqrt (∑ i, D.Sc t i x ^ 2) * Real.sqrt (D.Gam φ t x y)) := by
+        have hs0 : (0:ℝ) ≤ Real.sqrt (∑ i, D.Sc t i x ^ 2) := Real.sqrt_nonneg _
+        have h := mul_le_mul_of_nonneg_left hE3 hs0
+        nlinarith [h]
 
 /-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
 `C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
