@@ -195,15 +195,62 @@ lemma F_flipCoord_sub (t : ℝ) (i : Fin n) (x : Cube n) :
 
 /-! ## Heat-flow derivative identities -/
 
+/-- Flux identity `Y_i(t,y)·f_{T-t}(y) = f_{T-t}(σ_i y)`; this is what makes
+`ν_{T-t}` the exact solution of the reverse forward equation. -/
+lemma Y_mul_fs {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (y : Cube n) :
+    D.Y t i y * D.fs (D.T - t) y = D.fs (D.T - t) (flipCoord i y) := by
+  have hy : D.fs (D.T - t) y ≠ 0 := D.fs_ne_zero (D.T_sub_nonneg ht) y
+  simp only [Y]
+  field_simp
+
+/-- Reverse-time heat equation: `d/dt f_{T-t}(x) = -L f_{T-t}(x)`. -/
+lemma hasDerivAt_fs_sub (t : ℝ) (x : Cube n) :
+    HasDerivAt (fun t => D.fs (D.T - t) x) (-(cubeLap (D.fs (D.T - t)) x)) t := by
+  have h1 : HasDerivAt (fun s : ℝ => smooth (Real.exp (-s)) D.f x)
+      (cubeLap (smooth (Real.exp (-(D.T - t))) D.f) x) (D.T - t) :=
+    hasDerivAt_smooth_exp D.f x (D.T - t)
+  have h2 : HasDerivAt (fun u : ℝ => D.T - u) (-1) t := by
+    simpa using (hasDerivAt_const t D.T).sub (hasDerivAt_id t)
+  have h3 := h1.comp t h2
+  rw [mul_neg_one] at h3
+  simpa only [fs, heatAt, Function.comp_def] using h3
+
+/-- `L f_{T-t}(x) = f_{T-t}(x)·∑_i (Y_i - 1)/2`. -/
+lemma cubeLap_fs_eq {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
+    cubeLap (D.fs (D.T - t)) x = D.fs (D.T - t) x * ∑ i, (D.Y t i x - 1) / 2 := by
+  have hb : D.fs (D.T - t) x ≠ 0 := D.fs_ne_zero (D.T_sub_nonneg ht) x
+  simp only [cubeLap, Y, Finset.mul_sum]
+  rw [Finset.sum_div]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  field_simp
+
 /-- `∂_t F_t(x) = ∑_i S_i(t,x)` [LGF eq (3.8)]. -/
 lemma hasDerivAt_F {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
     HasDerivAt (fun t => D.F t x) (∑ i, D.Sc t i x) t := by
-  sorry
+  have hb : D.fs (D.T - t) x ≠ 0 := D.fs_ne_zero (D.T_sub_nonneg ht) x
+  have hsum : ∑ i, D.Sc t i x + ∑ i, (D.Y t i x - 1) / 2 = 0 := by
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_eq_zero fun i _ => ?_
+    simp only [Sc]; ring
+  have h2 : ∑ i, D.Sc t i x = -∑ i, (D.Y t i x - 1) / 2 := by linarith
+  have hval : -(cubeLap (D.fs (D.T - t)) x) / D.fs (D.T - t) x = ∑ i, D.Sc t i x := by
+    rw [D.cubeLap_fs_eq ht x, h2]
+    field_simp
+  have h := (D.hasDerivAt_fs_sub t x).log hb
+  rw [hval] at h
+  simpa only [F] using h
+
+/-- Continuity in `t` of `t ↦ f_{T-t}(x)`. -/
+lemma continuous_fs_sub (x : Cube n) : Continuous fun t => D.fs (D.T - t) x := by
+  simp only [fs, heatAt]
+  exact (continuous_smooth_exp D.f x).comp (continuous_const.sub continuous_id)
 
 /-- Continuity of `(t,x) ↦ F_t(x)` in `t` on `(-∞, T]`. -/
 lemma continuousOn_F (x : Cube n) :
     ContinuousOn (fun t => D.F t x) (Set.Iic D.T) := by
-  sorry
+  simp only [F]
+  exact (D.continuous_fs_sub x).continuousOn.log fun t ht =>
+    D.fs_ne_zero (D.T_sub_nonneg (Set.mem_Iic.mp ht)) x
 
 /-- The reciprocal `e^{-F_t(V_t)}` is space-time harmonic:
 `∂_t e^{-F_t(x)} = -L̃_t(e^{-F_t(·)})(x)` [LGF, Step 2 of Prop 3.2's proof]. -/
