@@ -2284,6 +2284,135 @@ private lemma abs_pertQ_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
         have h := mul_le_mul_of_nonneg_left hE3 hs0
         nlinarith [h]
 
+/-- Alive jump pairing against `Q` (mirror of the `U`-version). -/
+private lemma jrate_Q_pair_alive (φ : Cube n → ℝ) {ℓ θ : ℝ} (x₀ : Cube n)
+    (B : Set (Cube n)) (t : ℝ) (x y : Cube n) :
+    ∑ τ : JSt n, D.jrate (D.dbar ℓ θ x₀) B t (x, y, true) τ *
+        (D.Qtest φ t τ.1 τ.2.1 - D.Qtest φ t x y)
+      = (∑ i, D.Y t i x *
+          (D.Qtest φ t (flipCoord i x) (flipCoord i y) - D.Qtest φ t x y) / 2)
+        + D.pertQ φ ℓ θ x₀ t x y := by
+  rw [D.jrate_pair_true' (D.dbar ℓ θ x₀) B t x y
+    (fun τ => D.Qtest φ t τ.1 τ.2.1 - D.Qtest φ t x y), pertQ,
+    ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  by_cases hY : D.Y t i x < 1
+  · simp only [if_pos hY]
+    ring
+  · simp only [if_neg hY]
+    ring
+
+/-- Dead jump pairing against `Q`. -/
+private lemma jrate_Q_pair_dead (φ : Cube n → ℝ) (dd : ℝ)
+    (B : Set (Cube n)) (t : ℝ) (x y : Cube n) :
+    ∑ τ : JSt n, D.jrate dd B t (x, y, false) τ *
+        (D.Qtest φ t τ.1 τ.2.1 - D.Qtest φ t x y)
+      = ∑ i, D.Y t i x *
+          (D.Qtest φ t (flipCoord i x) (flipCoord i y) - D.Qtest φ t x y) / 2 := by
+  rw [D.jrate_pair_false' dd B t x y
+    (fun τ => D.Qtest φ t τ.1 τ.2.1 - D.Qtest φ t x y)]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  ring
+
+/-- The `Q`-pairing of the flow in cell `k`. -/
+private noncomputable def qPair (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) (k : ℕ) (t : ℝ) : ℝ :=
+  ∑ s : JSt n, c.π k t s * D.Qtest φ t s.1 s.2.1
+
+/-- The alive `q²`-perturbation integrand. -/
+private noncomputable def pertQPair (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) (k : ℕ) (t : ℝ) : ℝ :=
+  ∑ s : JSt n, (if s.2.2 = true then
+    c.π k t s * D.pertQ φ ℓ θ x₀ t s.1 s.2.1 else 0)
+
+/-- The (full-sector) `a_t²`-energy integrand. -/
+private noncomputable def apPair (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) (k : ℕ) (t : ℝ) : ℝ :=
+  ∑ s : JSt n, c.π k t s * D.apInt φ t s.1 s.2.1
+
+/-- Cell derivative of the `Q`-pairing: alive perturbation plus twice the
+`a_t²`-energy (both sectors) [LGF eq (4.20)]. -/
+private lemma qPair_hasDeriv (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) {k : ℕ} (hk : k < c.K) {t : ℝ}
+    (ht : t ∈ Set.Icc (c.z k) (c.z (k + 1))) :
+    HasDerivWithinAt (D.qPair φ c k)
+      (D.pertQPair φ c k t + 2 * D.apPair φ c k t)
+      (Set.Icc (c.z k) (c.z (k + 1))) t := by
+  classical
+  have hzo : c.z (k + 1) ≤ obsT := D.cell_le_obsT c hk
+  have htT : t < D.T := lt_of_le_of_lt (le_trans ht.2 hzo) D.obsT_lt_T
+  have hg : ∀ s : JSt n,
+      HasDerivWithinAt (fun u => D.Qtest φ u s.1 s.2.1)
+        (-(∑ i, D.Y t i s.1 *
+          (D.Qtest φ t (flipCoord i s.1) (flipCoord i s.2.1)
+            - D.Qtest φ t s.1 s.2.1) / 2) + 2 * D.apInt φ t s.1 s.2.1)
+        (Set.Icc (c.z k) (c.z (k + 1))) t :=
+    fun s => (D.hasDerivAt_Qtest φ htT s.1 s.2.1).hasDerivWithinAt
+  have hpair := hasDerivWithinAt_pairing (c.is.glued.flow k hk) ht hg
+  have hval : (∑ s : JSt n,
+      (matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s
+          * D.Qtest φ t s.1 s.2.1
+        + c.π k t s * (-(∑ i, D.Y t i s.1 *
+            (D.Qtest φ t (flipCoord i s.1) (flipCoord i s.2.1)
+              - D.Qtest φ t s.1 s.2.1) / 2) + 2 * D.apInt φ t s.1 s.2.1)))
+      = D.pertQPair φ c k t + 2 * D.apPair φ c k t := by
+    have hsplit : ∀ s : JSt n,
+        matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s
+            * D.Qtest φ t s.1 s.2.1
+          + c.π k t s * (-(∑ i, D.Y t i s.1 *
+              (D.Qtest φ t (flipCoord i s.1) (flipCoord i s.2.1)
+                - D.Qtest φ t s.1 s.2.1) / 2) + 2 * D.apInt φ t s.1 s.2.1)
+        = (matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s
+            * D.Qtest φ t s.1 s.2.1
+          + c.π k t s * -(∑ i, D.Y t i s.1 *
+              (D.Qtest φ t (flipCoord i s.1) (flipCoord i s.2.1)
+                - D.Qtest φ t s.1 s.2.1) / 2))
+          + c.π k t s * (2 * D.apInt φ t s.1 s.2.1) := by
+      intro s; ring
+    rw [Finset.sum_congr rfl fun s _ => hsplit s, Finset.sum_add_distrib]
+    have hfirst : (∑ s : JSt n,
+        (matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s
+            * D.Qtest φ t s.1 s.2.1
+          + c.π k t s * -(∑ i, D.Y t i s.1 *
+              (D.Qtest φ t (flipCoord i s.1) (flipCoord i s.2.1)
+                - D.Qtest φ t s.1 s.2.1) / 2)))
+        = D.pertQPair φ c k t := by
+      rw [Finset.sum_add_distrib]
+      have hA : ∑ s : JSt n,
+          matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s
+            * D.Qtest φ t s.1 s.2.1
+          = ∑ σ : JSt n, c.π k t σ *
+              (∑ τ : JSt n, D.jrate (D.dbar ℓ θ x₀)
+                (D.barrier ℓ ((c.z k + c.z (k + 1)) / 2)) t σ τ *
+                (D.Qtest φ t τ.1 τ.2.1 - D.Qtest φ t σ.1 σ.2.1)) := by
+        simp only [cellGen]
+        exact matVec_fwdOf_pairing _ _ _
+      rw [hA, ← Finset.sum_add_distrib, pertQPair]
+      refine Finset.sum_congr rfl fun σ _ => ?_
+      obtain ⟨x, y, b⟩ := σ
+      cases b with
+      | true =>
+        rw [D.jrate_Q_pair_alive φ x₀ _ t x y]
+        have hcond : (((x, y, true) : JSt n).2.2 = true) := rfl
+        rw [if_pos hcond]
+        ring
+      | false =>
+        rw [D.jrate_Q_pair_dead φ _ _ t x y]
+        have hif : (if ((x, y, false) : JSt n).2.2 = true then
+            c.π k t (x, y, false) * D.pertQ φ ℓ θ x₀ t x y else 0) = 0 := by
+          simp
+        rw [hif]
+        ring
+    have hsecond : (∑ s : JSt n, c.π k t s * (2 * D.apInt φ t s.1 s.2.1))
+        = 2 * D.apPair φ c k t := by
+      rw [apPair, Finset.mul_sum]
+      exact Finset.sum_congr rfl fun s _ => by ring
+    rw [hfirst, hsecond]
+  have hfun : (fun u => ∑ s : JSt n, c.π k u s * D.Qtest φ u s.1 s.2.1)
+      = D.qPair φ c k := rfl
+  rw [hfun, hval] at hpair
+  exact hpair
+
 /-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
 `C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
 `A ⊆ ℰ_θ`,
