@@ -2980,10 +2980,9 @@ theorem DA_le :
   set Cst := Real.sqrt 8 * Real.sqrt κ * Λ with hCst
   have hCst0 : 0 ≤ Cst := by positivity
   have hCst_sq : Cst ^ 2 = 8 * κ * Λ ^ 2 := by
-    rw [hCst]
     have h8 : Real.sqrt 8 ^ 2 = 8 := Real.sq_sqrt (by norm_num)
     have hκs : Real.sqrt κ ^ 2 = κ := Real.sq_sqrt hκ0.le
-    nlinarith [h8, hκs]
+    rw [hCst, mul_pow, mul_pow, h8, hκs]
   -- the optimal test set
   obtain ⟨B, hB⟩ := D.exists_DA_eq hθ Φ A
   set φ : Cube n → ℝ := fun w => if w ∈ B then (1 : ℝ) else 0 with hφdef
