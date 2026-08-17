@@ -114,7 +114,7 @@ lemma unifE_nonneg {g : Cube n → ℝ} (hg : ∀ x, 0 ≤ g x) : 0 ≤ unifE g 
   positivity
 
 @[simp] lemma unifE_const (c : ℝ) : unifE (fun _ : Cube n => c) = c := by
-  have h2 : ((2 : ℝ)) ^ n ≠ 0 := by positivity
+  have h2 : ((2 : ℝ)) ^ n ≠ 0 := pow_ne_zero _ (by norm_num)
   simp only [unifE, Finset.sum_const, Finset.card_univ, card_cube,
     nsmul_eq_mul, Nat.cast_pow, Nat.cast_ofNat]
   field_simp
@@ -129,10 +129,9 @@ lemma unifE_smul (c : ℝ) (g : Cube n → ℝ) :
 
 lemma unifE_mono {g h : Cube n → ℝ} (hgh : ∀ x, g x ≤ h x) :
     unifE g ≤ unifE h := by
-  unfold unifE
-  gcongr with x _
-  · positivity
-  · exact hgh x
+  have hsum : ∑ x, g x ≤ ∑ x, h x := Finset.sum_le_sum fun x _ => hgh x
+  rw [unifE, unifE, div_eq_mul_inv, div_eq_mul_inv]
+  exact mul_le_mul_of_nonneg_right hsum (by positivity)
 
 /-- Invariance of `λ` under coordinate flips. -/
 lemma unifE_comp_flipCoord (i : Fin n) (g : Cube n → ℝ) :
