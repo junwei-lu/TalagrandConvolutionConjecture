@@ -620,6 +620,484 @@ theorem bpart_Gam_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
           mul_le_mul_of_nonneg_left (hkey ζ) (D.Hlik_nonneg hT ζ x)
     _ = kappa D.a / 4 := by rw [← Finset.sum_mul, D.sum_Hlik hT x, one_mul]
 
+/-! ### Stage A: the localized Duhamel identity [LGF eq (4.10)]
+
+`𝔼_{x₀}[φ(W_{T_o})] - 𝔼_{x₀}[φ(V_{T_o})] = ∑_k ∫_cell ⟨π^{alive}, 𝓑U⟩`:
+the pairing of the flow with the sector-blind test
+`U_t(V-pos, W-pos)` has cell derivative exactly the alive perturbation
+(the synchronized parts cancel against the harmonicity of `U`), and the
+node transfers are invisible to a sector-blind test. -/
+
+/-- A rate `if`-term with a uniquely determined target collapses. -/
+private lemma sum_state_eq' {P : JSt n → Prop} [DecidablePred P] {τ₀ : JSt n}
+    (hP : ∀ τ, P τ ↔ τ = τ₀) (r : ℝ) (f : JSt n → ℝ) :
+    ∑ τ : JSt n, (if P τ then r else 0) * f τ = r * f τ₀ := by
+  classical
+  have key : ∀ τ : JSt n,
+      (if P τ then r else 0) * f τ = if τ = τ₀ then r * f τ₀ else 0 := by
+    intro τ
+    by_cases hτ : τ = τ₀
+    · rw [if_pos hτ, if_pos ((hP τ).mpr hτ), hτ]
+    · rw [if_neg hτ, if_neg (fun hc => hτ ((hP τ).mp hc)), zero_mul]
+  simp [key]
+
+/-- Transposed action of a forward matrix against a test function. -/
+private lemma fwdOf_transpose_pair' (q : JSt n → JSt n → ℝ) (g : JSt n → ℝ)
+    (σ : JSt n) :
+    ∑ s, fwdOf q s σ * g s = ∑ s, q σ s * (g s - g σ) := by
+  classical
+  have h2 : ∑ s, (if s = σ then ∑ s'', q s s'' else 0) * g s
+      = (∑ s'', q σ s'') * g σ := by simp
+  simp only [fwdOf, sub_mul, Finset.sum_sub_distrib, h2, mul_sub]
+  rw [← Finset.sum_mul]
+
+private lemma jrate_apply' (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
+    (x y : Cube n) (b : Bool) (τ : JSt n) :
+    D.jrate dd B t (x, y, b) τ
+      = ∑ i : Fin n,
+        ((if τ.1 = flipCoord i x ∧ τ.2.1 = flipCoord i y ∧
+              (τ.2.2 = (b && decide (τ.1 ∉ B))) then
+            (if b then
+              (if D.Y t i x < 1 then D.Y t i x / 2
+               else D.Y t i x ^ (1 - dd) / 2)
+             else D.Y t i x / 2)
+          else 0)
+        + (if b ∧ τ.2.2 = true ∧ τ.1 = x ∧ τ.2.1 = flipCoord i y ∧
+              D.Y t i x < 1 then
+            (1 - D.Y t i x ^ dd) / 2
+          else 0)
+        + (if b ∧ τ.2.1 = y ∧ τ.1 = flipCoord i x ∧ ¬(D.Y t i x < 1) ∧
+              (τ.2.2 = decide (τ.1 ∉ B)) then
+            (D.Y t i x - D.Y t i x ^ (1 - dd)) / 2
+          else 0)) := by
+  obtain ⟨x', y', b'⟩ := τ; rfl
+
+open Classical in
+/-- Alive-sector jump pairing, expanded coordinate by coordinate. -/
+private lemma jrate_pair_true' (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
+    (x y : Cube n) (f : JSt n → ℝ) :
+    ∑ τ : JSt n, D.jrate dd B t (x, y, true) τ * f τ
+      = ∑ i : Fin n,
+        ((if D.Y t i x < 1 then D.Y t i x / 2 else D.Y t i x ^ (1 - dd) / 2)
+            * f (flipCoord i x, flipCoord i y, decide (flipCoord i x ∉ B))
+        + (if D.Y t i x < 1 then (1 - D.Y t i x ^ dd) / 2 else 0)
+            * f (x, flipCoord i y, true)
+        + (if D.Y t i x < 1 then 0 else (D.Y t i x - D.Y t i x ^ (1 - dd)) / 2)
+            * f (flipCoord i x, y, decide (flipCoord i x ∉ B))) := by
+  simp_rw [D.jrate_apply' dd B t x y true, Finset.sum_mul]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  simp_rw [add_mul]
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib]
+  refine congrArg₂ (· + ·) (congrArg₂ (· + ·) ?_ ?_) ?_
+  · refine sum_state_eq'
+      (P := fun τ : JSt n => τ.1 = flipCoord i x ∧ τ.2.1 = flipCoord i y ∧
+        (τ.2.2 = (true && decide (τ.1 ∉ B))))
+      (τ₀ := (flipCoord i x, flipCoord i y, decide (flipCoord i x ∉ B))) ?_ _ _
+    intro τ
+    constructor
+    · rintro ⟨h1, h2, h3⟩
+      rw [h1, Bool.true_and] at h3
+      exact Prod.ext_iff.mpr ⟨h1, Prod.ext_iff.mpr ⟨h2, h3⟩⟩
+    · rintro rfl; exact ⟨rfl, rfl, by simp⟩
+  · by_cases hY : D.Y t i x < 1
+    · rw [if_pos hY]
+      refine sum_state_eq'
+        (P := fun τ : JSt n => True ∧ τ.2.2 = true ∧ τ.1 = x ∧
+          τ.2.1 = flipCoord i y ∧ D.Y t i x < 1)
+        (τ₀ := (x, flipCoord i y, true)) ?_ _ _
+      intro τ
+      constructor
+      · rintro ⟨-, h2, h3, h4, -⟩
+        exact Prod.ext_iff.mpr ⟨h3, Prod.ext_iff.mpr ⟨h4, h2⟩⟩
+      · rintro rfl; exact ⟨trivial, rfl, rfl, rfl, hY⟩
+    · rw [if_neg hY, zero_mul]
+      refine Finset.sum_eq_zero fun τ _ => ?_
+      rw [if_neg (fun hc => hY hc.2.2.2.2), zero_mul]
+  · by_cases hY : D.Y t i x < 1
+    · rw [if_pos hY, zero_mul]
+      refine Finset.sum_eq_zero fun τ _ => ?_
+      rw [if_neg (fun hc => hc.2.2.2.1 hY), zero_mul]
+    · rw [if_neg hY]
+      refine sum_state_eq'
+        (P := fun τ : JSt n => True ∧ τ.2.1 = y ∧ τ.1 = flipCoord i x ∧
+          ¬(D.Y t i x < 1) ∧ (τ.2.2 = decide (τ.1 ∉ B)))
+        (τ₀ := (flipCoord i x, y, decide (flipCoord i x ∉ B))) ?_ _ _
+      intro τ
+      constructor
+      · rintro ⟨-, h2, h3, -, h5⟩
+        rw [h3] at h5
+        exact Prod.ext_iff.mpr ⟨h3, Prod.ext_iff.mpr ⟨h2, h5⟩⟩
+      · rintro rfl; exact ⟨trivial, rfl, rfl, hY, rfl⟩
+
+open Classical in
+/-- Dead-sector jump pairing: synchronized flips only. -/
+private lemma jrate_pair_false' (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
+    (x y : Cube n) (f : JSt n → ℝ) :
+    ∑ τ : JSt n, D.jrate dd B t (x, y, false) τ * f τ
+      = ∑ i : Fin n, D.Y t i x / 2 * f (flipCoord i x, flipCoord i y, false) := by
+  simp_rw [D.jrate_apply' dd B t x y false, Finset.sum_mul]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  simp_rw [add_mul]
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib]
+  have h2 : ∑ τ : JSt n,
+      (if (false : Bool) ∧ τ.2.2 = true ∧ τ.1 = x ∧ τ.2.1 = flipCoord i y ∧
+          D.Y t i x < 1 then (1 - D.Y t i x ^ dd) / 2 else 0) * f τ = 0 := by
+    refine Finset.sum_eq_zero fun τ _ => ?_
+    rw [if_neg (by rintro ⟨h, -⟩; exact Bool.noConfusion h), zero_mul]
+  have h3 : ∑ τ : JSt n,
+      (if (false : Bool) ∧ τ.2.1 = y ∧ τ.1 = flipCoord i x ∧
+          ¬(D.Y t i x < 1) ∧ (τ.2.2 = decide (τ.1 ∉ B)) then
+        (D.Y t i x - D.Y t i x ^ (1 - dd)) / 2 else 0) * f τ = 0 := by
+    refine Finset.sum_eq_zero fun τ _ => ?_
+    rw [if_neg (by rintro ⟨h, -⟩; exact Bool.noConfusion h), zero_mul]
+  rw [h2, h3, add_zero, add_zero]
+  refine sum_state_eq'
+    (P := fun τ : JSt n => τ.1 = flipCoord i x ∧ τ.2.1 = flipCoord i y ∧
+      (τ.2.2 = ((false : Bool) && decide (τ.1 ∉ B))))
+    (τ₀ := (flipCoord i x, flipCoord i y, false)) ?_ _ _
+  intro τ
+  constructor
+  · rintro ⟨h1, h2, h3⟩
+    rw [Bool.false_and] at h3
+    exact Prod.ext_iff.mpr ⟨h1, Prod.ext_iff.mpr ⟨h2, h3⟩⟩
+  · rintro rfl; exact ⟨rfl, rfl, by simp⟩
+
+/-- The alive-sector power perturbation applied to `U` at one position pair
+(the integrand of the localized Duhamel identity, [LGF eq (4.10)]). -/
+private noncomputable def pertU (φ : Cube n → ℝ) (ℓ θ : ℝ) (x₀ : Cube n)
+    (t : ℝ) (x y : Cube n) : ℝ :=
+  ∑ i, (if D.Y t i x < 1 then
+      (1 - D.Y t i x ^ D.dbar ℓ θ x₀) / 2 *
+        (D.Utest φ t x (flipCoord i y) - D.Utest φ t x y)
+    else
+      -((D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) / 2) *
+        (D.Utest φ t (flipCoord i x) (flipCoord i y)
+          - D.Utest φ t (flipCoord i x) y))
+
+/-- Restatement of `abs_pert_Utest_le` for `pertU`. -/
+private lemma abs_pertU_le {ℓ θ t : ℝ} (ht0 : θ ≤ t) (ht : t ≤ obsT)
+    (hθ : θ ≤ obsT) {x₀ : Cube n} {φ : Cube n → ℝ}
+    (hφ : ∀ w, φ w = 0 ∨ φ w = 1) (x y : Cube n) :
+    |D.pertU φ ℓ θ x₀ t x y|
+      ≤ Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a * D.dbar ℓ θ x₀
+        * Real.sqrt (∑ i, D.Sc t i x ^ 2) * Real.sqrt (D.Gam φ t x y) :=
+  D.abs_pert_Utest_le ht0 ht hθ hφ x y
+
+/-- The single-source pairing identity: at an alive source, the jump pairing
+of `U` equals the synchronized part plus the power perturbation. -/
+private lemma jrate_U_pair_alive (φ : Cube n → ℝ) {ℓ θ : ℝ} (x₀ : Cube n)
+    (B : Set (Cube n)) (t : ℝ) (x y : Cube n) :
+    ∑ τ : JSt n, D.jrate (D.dbar ℓ θ x₀) B t (x, y, true) τ *
+        (D.Utest φ t τ.1 τ.2.1 - D.Utest φ t x y)
+      = (∑ i, D.Y t i x *
+          (D.Utest φ t (flipCoord i x) (flipCoord i y) - D.Utest φ t x y) / 2)
+        + D.pertU φ ℓ θ x₀ t x y := by
+  rw [D.jrate_pair_true' (D.dbar ℓ θ x₀) B t x y
+    (fun τ => D.Utest φ t τ.1 τ.2.1 - D.Utest φ t x y), pertU,
+    ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  by_cases hY : D.Y t i x < 1
+  · simp only [if_pos hY]
+    ring
+  · simp only [if_neg hY]
+    ring
+
+/-- At a dead source the jump pairing of `U` is purely synchronized. -/
+private lemma jrate_U_pair_dead (φ : Cube n → ℝ) (dd : ℝ)
+    (B : Set (Cube n)) (t : ℝ) (x y : Cube n) :
+    ∑ τ : JSt n, D.jrate dd B t (x, y, false) τ *
+        (D.Utest φ t τ.1 τ.2.1 - D.Utest φ t x y)
+      = ∑ i, D.Y t i x *
+          (D.Utest φ t (flipCoord i x) (flipCoord i y) - D.Utest φ t x y) / 2 := by
+  rw [D.jrate_pair_false' dd B t x y
+    (fun τ => D.Utest φ t τ.1 τ.2.1 - D.Utest φ t x y)]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  ring
+
+/-- Generic pairing of a forward matrix against a test. -/
+private lemma matVec_fwdOf_pairing (q : JSt n → JSt n → ℝ) (v w : JSt n → ℝ) :
+    ∑ s, matVec (fwdOf q) v s * w s
+      = ∑ σ, v σ * (∑ τ, q σ τ * (w τ - w σ)) := by
+  classical
+  have h1 : ∑ s, matVec (fwdOf q) v s * w s
+      = ∑ σ, v σ * (∑ s, fwdOf q s σ * w s) := by
+    simp only [matVec, Finset.sum_mul]
+    rw [Finset.sum_comm]
+    exact Finset.sum_congr rfl fun σ _ =>
+      by rw [Finset.mul_sum]; exact Finset.sum_congr rfl fun s _ => by ring
+  rw [h1]
+  exact Finset.sum_congr rfl fun σ _ => by rw [fwdOf_transpose_pair']
+
+/-- The `max`-form of the perturbation coefficients (manifestly continuous
+across the `Y = 1` branch switch, where both branches vanish). -/
+private lemma pertU_eq_max_form (φ : Cube n → ℝ) (ℓ θ : ℝ) (x₀ : Cube n)
+    {t : ℝ} (ht : t ≤ D.T) (x y : Cube n) :
+    D.pertU φ ℓ θ x₀ t x y
+      = ∑ i, (max (1 - D.Y t i x ^ D.dbar ℓ θ x₀) 0 / 2 *
+          (D.Utest φ t x (flipCoord i y) - D.Utest φ t x y)
+        - max (D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) 0 / 2 *
+          (D.Utest φ t (flipCoord i x) (flipCoord i y)
+            - D.Utest φ t (flipCoord i x) y)) := by
+  refine Finset.sum_congr rfl fun i _ => ?_
+  have hY0 : 0 < D.Y t i x := D.Y_pos ht i x
+  have hd0 : 0 ≤ D.dbar ℓ θ x₀ := D.dbar_nonneg ℓ θ x₀
+  have hd1 : D.dbar ℓ θ x₀ ≤ 1 := by
+    have := D.dbar_lt_half ℓ θ x₀; linarith
+  by_cases hY : D.Y t i x < 1
+  · have h1 : D.Y t i x ^ D.dbar ℓ θ x₀ ≤ 1 :=
+      Real.rpow_le_one hY0.le hY.le hd0
+    have h2 : D.Y t i x ≤ D.Y t i x ^ (1 - D.dbar ℓ θ x₀) := by
+      have := Real.rpow_le_rpow_of_exponent_ge hY0 hY.le
+        (show 1 - D.dbar ℓ θ x₀ ≤ 1 by linarith)
+      simpa [Real.rpow_one] using this
+    rw [if_pos hY, max_eq_left (by linarith), max_eq_right (by linarith)]
+    ring
+  · push_neg at hY
+    have h1 : 1 ≤ D.Y t i x ^ D.dbar ℓ θ x₀ :=
+      Real.one_le_rpow hY hd0
+    have h2 : D.Y t i x ^ (1 - D.dbar ℓ θ x₀) ≤ D.Y t i x := by
+      have := Real.rpow_le_rpow_of_exponent_le hY
+        (show 1 - D.dbar ℓ θ x₀ ≤ 1 by linarith)
+      simpa [Real.rpow_one] using this
+    rw [if_neg (not_lt.mpr hY), max_eq_right (by linarith),
+      max_eq_left (by linarith)]
+    ring
+
+/-- Continuity in `t` of `U_t(x,y)` on any interval inside `(-∞, T)`. -/
+private lemma continuousOn_Utest (φ : Cube n → ℝ) {a b : ℝ} (hb : b < D.T)
+    (x y : Cube n) :
+    ContinuousOn (fun t => D.Utest φ t x y) (Set.Icc a b) := fun t ht =>
+  ((D.hasDerivAt_Utest φ (lt_of_le_of_lt ht.2 hb) x y).continuousAt).continuousWithinAt
+
+/-- Continuity in `t` of the perturbation on a closed cell below `T`. -/
+private lemma continuousOn_pertU (φ : Cube n → ℝ) (ℓ θ : ℝ) (x₀ : Cube n)
+    {a b : ℝ} (hb : b < D.T) (x y : Cube n) :
+    ContinuousOn (fun t => D.pertU φ ℓ θ x₀ t x y) (Set.Icc a b) := by
+  have hsub : Set.Icc a b ⊆ Set.Iic D.T := fun t ht => le_of_lt (lt_of_le_of_lt ht.2 hb)
+  have hforms : ∀ t ∈ Set.Icc a b, D.pertU φ ℓ θ x₀ t x y
+      = ∑ i, (max (1 - D.Y t i x ^ D.dbar ℓ θ x₀) 0 / 2 *
+          (D.Utest φ t x (flipCoord i y) - D.Utest φ t x y)
+        - max (D.Y t i x - D.Y t i x ^ (1 - D.dbar ℓ θ x₀)) 0 / 2 *
+          (D.Utest φ t (flipCoord i x) (flipCoord i y)
+            - D.Utest φ t (flipCoord i x) y)) := fun t ht =>
+    D.pertU_eq_max_form φ ℓ θ x₀ (hsub ht) x y
+  refine ContinuousOn.congr ?_ hforms
+  refine continuousOn_finset_sum _ fun i _ => ?_
+  have hYc : ContinuousOn (fun t => D.Y t i x) (Set.Icc a b) :=
+    (D.continuousOn_Y i x).mono hsub
+  have hYne : ∀ t ∈ Set.Icc a b, D.Y t i x ≠ 0 := fun t ht =>
+    (D.Y_pos (hsub ht) i x).ne'
+  have hr1 : ContinuousOn (fun t => D.Y t i x ^ D.dbar ℓ θ x₀) (Set.Icc a b) :=
+    hYc.rpow_const fun t ht => Or.inl (hYne t ht)
+  have hr2 : ContinuousOn (fun t => D.Y t i x ^ (1 - D.dbar ℓ θ x₀))
+      (Set.Icc a b) := hYc.rpow_const fun t ht => Or.inl (hYne t ht)
+  exact (((continuousOn_const.sub hr1).max continuousOn_const).div_const 2 |>.mul
+      ((D.continuousOn_Utest φ hb x (flipCoord i y)).sub
+        (D.continuousOn_Utest φ hb x y))).sub
+    (((hYc.sub hr2).max continuousOn_const).div_const 2 |>.mul
+      ((D.continuousOn_Utest φ hb (flipCoord i x) (flipCoord i y)).sub
+        (D.continuousOn_Utest φ hb (flipCoord i x) y)))
+
+/-- The `U`-pairing of the flow in cell `k`. -/
+private noncomputable def uPair (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) (k : ℕ) (t : ℝ) : ℝ :=
+  ∑ s : JSt n, c.π k t s * D.Utest φ t s.1 s.2.1
+
+/-- The alive-perturbation integrand of the Duhamel identity. -/
+private noncomputable def pertPair (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) (k : ℕ) (t : ℝ) : ℝ :=
+  ∑ s : JSt n, (if s.2.2 = true then
+    c.π k t s * D.pertU φ ℓ θ x₀ t s.1 s.2.1 else 0)
+
+/-- Grid nodes are monotone. -/
+private lemma grid_le'' {ℓ θ : ℝ} {x₀ : Cube n} (c : D.CFlow ℓ θ x₀) :
+    ∀ q p, p ≤ q → q ≤ c.K → c.z p ≤ c.z q := by
+  intro q
+  induction q with
+  | zero => intro p hp _; simp [Nat.le_zero.mp hp]
+  | succ m ih =>
+    intro p hp hm
+    rcases Nat.eq_or_lt_of_le hp with h | h
+    · rw [h]
+    · exact le_trans (ih p (Nat.lt_succ_iff.mp h) (Nat.le_of_succ_le hm))
+        (c.is.grid.mono m (Nat.lt_of_succ_le hm))
+
+/-- Right cell endpoints stay below the observation time. -/
+private lemma cell_le_obsT {ℓ θ : ℝ} {x₀ : Cube n} (c : D.CFlow ℓ θ x₀)
+    {k : ℕ} (hk : k < c.K) : c.z (k + 1) ≤ obsT := by
+  have h := D.grid_le'' c c.K (k + 1) (Nat.succ_le_of_lt hk) le_rfl
+  rwa [c.is.grid.last] at h
+
+/-- **Cell derivative of the `U`-pairing**: the synchronized parts cancel
+against the harmonicity of `U`, leaving the alive perturbation. -/
+private lemma uPair_hasDeriv (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) {k : ℕ} (hk : k < c.K) {t : ℝ}
+    (ht : t ∈ Set.Icc (c.z k) (c.z (k + 1))) :
+    HasDerivWithinAt (D.uPair φ c k) (D.pertPair φ c k t)
+      (Set.Icc (c.z k) (c.z (k + 1))) t := by
+  classical
+  have hzo : c.z (k + 1) ≤ obsT := D.cell_le_obsT c hk
+  have htT : t < D.T := lt_of_le_of_lt (le_trans ht.2 hzo) D.obsT_lt_T
+  have hg : ∀ s : JSt n,
+      HasDerivWithinAt (fun u => D.Utest φ u s.1 s.2.1)
+        (-(∑ i, D.Y t i s.1 *
+          (D.Utest φ t (flipCoord i s.1) (flipCoord i s.2.1)
+            - D.Utest φ t s.1 s.2.1) / 2))
+        (Set.Icc (c.z k) (c.z (k + 1))) t :=
+    fun s => (D.hasDerivAt_Utest φ htT s.1 s.2.1).hasDerivWithinAt
+  have hpair := hasDerivWithinAt_pairing (c.is.glued.flow k hk) ht hg
+  have hval : (∑ s : JSt n,
+      (matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s
+          * D.Utest φ t s.1 s.2.1
+        + c.π k t s * -(∑ i, D.Y t i s.1 *
+            (D.Utest φ t (flipCoord i s.1) (flipCoord i s.2.1)
+              - D.Utest φ t s.1 s.2.1) / 2)))
+      = D.pertPair φ c k t := by
+    rw [Finset.sum_add_distrib]
+    have hA : ∑ s : JSt n,
+        matVec (D.cellGen ℓ θ (D.dbar ℓ θ x₀) c.z k t) (c.π k t) s
+          * D.Utest φ t s.1 s.2.1
+        = ∑ σ : JSt n, c.π k t σ *
+            (∑ τ : JSt n, D.jrate (D.dbar ℓ θ x₀)
+              (D.barrier ℓ ((c.z k + c.z (k + 1)) / 2)) t σ τ *
+              (D.Utest φ t τ.1 τ.2.1 - D.Utest φ t σ.1 σ.2.1)) := by
+      simp only [cellGen]
+      exact D.matVec_fwdOf_pairing _ _ _
+    rw [hA, ← Finset.sum_add_distrib, pertPair]
+    refine Finset.sum_congr rfl fun σ _ => ?_
+    obtain ⟨x, y, b⟩ := σ
+    cases b with
+    | true =>
+      rw [D.jrate_U_pair_alive φ x₀ _ t x y]
+      simp only [if_pos rfl]
+      ring
+    | false =>
+      rw [D.jrate_U_pair_dead φ _ _ t x y]
+      have hif : (if ((x, y, false) : JSt n).2.2 = true then
+          c.π k t (x, y, false) * D.pertU φ ℓ θ x₀ t x y else 0) = 0 := by
+        simp
+      rw [hif]
+      ring
+  have hfun : (fun u => ∑ s : JSt n, c.π k u s * D.Utest φ u s.1 s.2.1)
+      = D.uPair φ c k := rfl
+  rw [hfun, hval] at hpair
+  exact hpair
+
+open Classical in
+/-- The node transfer as a `{0,1}` matrix with one nonzero entry per column. -/
+private lemma killTr_eq_single' (ℓ t : ℝ) (s s' : JSt n) :
+    D.killTr ℓ t s s'
+      = if s = (s'.1, s'.2.1, (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ t))) then 1
+        else 0 := by
+  obtain ⟨x, y, b⟩ := s
+  obtain ⟨x', y', b'⟩ := s'
+  simp only [killTr, Prod.mk.injEq]
+
+open Classical in
+/-- Node transfers are invisible to a sector-blind test of both positions. -/
+private lemma killTr_pair_pos (ℓ t : ℝ) (v : JSt n → ℝ)
+    (h : Cube n → Cube n → ℝ) :
+    ∑ s : JSt n, matVec (D.killTr ℓ t) v s * h s.1 s.2.1
+      = ∑ s : JSt n, v s * h s.1 s.2.1 := by
+  simp only [matVec, Finset.sum_mul]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun s' _ => ?_
+  have key : ∀ s : JSt n, D.killTr ℓ t s s' * v s' * h s.1 s.2.1
+      = if s = (s'.1, s'.2.1, (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ t))) then
+          v s' * h s'.1 s'.2.1 else 0 := by
+    intro s
+    rw [D.killTr_eq_single' ℓ t s s']
+    by_cases hs : s = ((s'.1, s'.2.1,
+        (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ t))) : JSt n)
+    · rw [if_pos hs, if_pos hs, hs]
+      simp
+    · rw [if_neg hs, if_neg hs, zero_mul, zero_mul]
+  rw [Finset.sum_congr rfl fun s _ => key s]
+  simp
+
+/-- **The localized Duhamel identity** [LGF eq (4.10)]: for a `{0,1}`-valued
+test (indicator of `B`), the signed terminal discrepancy of one coupling flow
+is the accumulated alive perturbation. -/
+private lemma duhamel {ℓ θ : ℝ} (hθ0 : 0 ≤ θ) (hθ : θ ≤ obsT) {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) (B : Finset (Cube n)) :
+    D.DtestF c B
+      = ∑ k ∈ Finset.range c.K, ∫ t in c.z k..c.z (k + 1),
+          D.pertPair (fun w => if w ∈ B then (1 : ℝ) else 0) c k t := by
+  classical
+  set φ : Cube n → ℝ := fun w => if w ∈ B then (1 : ℝ) else 0 with hφdef
+  have hK : 0 < c.K := c.is.grid.pos
+  have hzo : ∀ k, k < c.K → c.z (k + 1) ≤ obsT := fun k hk => D.cell_le_obsT c hk
+  have hcellT : ∀ k, k < c.K → c.z (k + 1) < D.T := fun k hk =>
+    lt_of_le_of_lt (hzo k hk) D.obsT_lt_T
+  -- continuity of the pairing on each cell
+  have hucont : ∀ k, k < c.K →
+      ContinuousOn (D.uPair φ c k) (Set.Icc (c.z k) (c.z (k + 1))) := by
+    intro k hk
+    exact fun t ht => (D.uPair_hasDeriv φ c hk ht).continuousWithinAt
+  -- integrability of the perturbation integrand on each cell
+  have hint : ∀ k, k < c.K →
+      IntervalIntegrable (D.pertPair φ c k) MeasureTheory.volume
+        (c.z k) (c.z (k + 1)) := by
+    intro k hk
+    have hcont : ContinuousOn (D.pertPair φ c k)
+        (Set.Icc (c.z k) (c.z (k + 1))) := by
+      refine continuousOn_finset_sum _ fun s _ => ?_
+      by_cases hs : s.2.2 = true
+      · simp only [pertPair, if_pos hs]
+        exact ((c.is.glued.flow k hk).cont s).mul
+          (D.continuousOn_pertU φ ℓ θ x₀ (hcellT k hk) s.1 s.2.1)
+      · simp only [pertPair, if_neg hs]
+        exact continuousOn_const
+    exact ContinuousOn.intervalIntegrable
+      (by rwa [Set.uIcc_of_le (c.is.grid.mono k hk)])
+  -- node preservation: sector-blind test
+  have hnode_eq : ∀ k, k + 1 < c.K →
+      D.uPair φ c (k + 1) (c.z (k + 1)) = D.uPair φ c k (c.z (k + 1)) := by
+    intro k hk1
+    have hnode := c.is.glued.node k hk1
+    simp only [uPair, hnode]
+    exact D.killTr_pair_pos ℓ (c.z (k + 1)) (c.π k (c.z (k + 1)))
+      (fun v w => D.Utest φ (c.z (k + 1)) v w)
+  -- exact chaining
+  have hchain := chain_eq (u := D.uPair φ c) (φ := D.pertPair φ c) hK
+    c.is.grid.mono hucont
+    (fun k hk t ht => D.uPair_hasDeriv φ c hk ht) hint hnode_eq
+  -- endpoints
+  have hlast : c.z c.K = obsT := c.is.grid.last
+  have hfirst : c.z 0 = θ := c.is.grid.first
+  -- terminal value: `∑ term·φ(W)`
+  have hterm : D.uPair φ c (c.K - 1) (c.z c.K)
+      = ∑ s : JSt n, c.term s * φ s.2.1 := by
+    rw [hlast]
+    refine Finset.sum_congr rfl fun s _ => ?_
+    rw [Dat.CFlow.term, D.Utest_obsT φ s.1 s.2.1]
+  -- initial value: `∑ term·φ(V)` via the diagonal transport
+  have hinit : D.uPair φ c 0 (c.z 0) = ∑ s : JSt n, c.term s * φ s.1 := by
+    have h1 : D.uPair φ c 0 (c.z 0) = D.Utest φ (c.z 0) x₀ x₀ := by
+      simp only [uPair]
+      rw [c.is.glued.init, D.killTr_pair_pos ℓ (c.z 0) (initVec x₀)
+        (fun v w => D.Utest φ (c.z 0) v w)]
+      have hsel : ∀ s : JSt n, initVec x₀ s * D.Utest φ (c.z 0) s.1 s.2.1
+          = if s = ((x₀, x₀, true) : JSt n) then
+              D.Utest φ (c.z 0) x₀ x₀ else 0 := by
+        intro s
+        simp only [initVec]
+        by_cases hs : s = ((x₀, x₀, true) : JSt n)
+        · rw [if_pos hs, if_pos hs, hs, one_mul]
+        · rw [if_neg hs, if_neg hs, zero_mul]
+      rw [Finset.sum_congr rfl fun s _ => hsel s]
+      simp
+    rw [h1, hfirst]
+    exact (D.term_V_eq_Utest_diag hθ0 hθ c φ).symm
+  -- assemble
+  have hD : D.DtestF c B
+      = (∑ s : JSt n, c.term s * φ s.2.1) - ∑ s : JSt n, c.term s * φ s.1 := by
+    simp only [DtestF, hφdef, mul_sub, Finset.sum_sub_distrib]
+  rw [hD, ← hterm, ← hinit, hchain]
+  ring
+
 /-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
 `C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
 `A ⊆ ℰ_θ`,
