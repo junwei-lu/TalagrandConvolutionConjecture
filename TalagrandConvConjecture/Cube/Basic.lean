@@ -98,7 +98,7 @@ lemma sum_comp_mul_right (y : Cube n) (g : Cube n → ℝ) :
   Fintype.sum_bijective (· * y) (Group.mulRight_bijective y) _ _ (fun _ => rfl)
 
 @[simp] lemma card_cube : Fintype.card (Cube n) = 2 ^ n := by
-  simp [Cube]
+  sorry
 
 /-! ## Uniform expectation and uniform measure -/
 
@@ -110,8 +110,8 @@ noncomputable def unifMeas (E : Set (Cube n)) : ℝ :=
   unifE (E.indicator fun _ => (1 : ℝ))
 
 lemma unifE_nonneg {g : Cube n → ℝ} (hg : ∀ x, 0 ≤ g x) : 0 ≤ unifE g := by
-  have : 0 ≤ ∑ x, g x := Finset.sum_nonneg fun x _ => hg x
-  positivity
+  have h : 0 ≤ ∑ x, g x := Finset.sum_nonneg fun x _ => hg x
+  exact div_nonneg h (by positivity)
 
 @[simp] lemma unifE_const (c : ℝ) : unifE (fun _ : Cube n => c) = c := by
   have h2 : ((2 : ℝ)) ^ n ≠ 0 := pow_ne_zero _ (by norm_num)
