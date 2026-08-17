@@ -175,7 +175,7 @@ theorem hasDerivAt_Utest (φ : Cube n → ℝ) {t : ℝ} (ht : t < D.T)
               - D.Hlik t ζ x * D.qB φ t ζ x y) / 2)) t := by
     intro ζ
     have hH := D.hasDerivAt_Hlik ht ζ x
-    have hq := D.hasDerivAt_qB φ t ζ x y
+    have hq := D.hasDerivAt_qB φ (ne_of_lt ht) ζ x y
     have hstep : ∀ i : Fin n,
         D.Y t i x * (D.Hlik t ζ (flipCoord i x) - D.Hlik t ζ x) / 2 * D.qB φ t ζ x y
           + D.Hlik t ζ x *

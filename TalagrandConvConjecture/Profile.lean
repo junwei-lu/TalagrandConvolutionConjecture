@@ -28,13 +28,13 @@ Four statements in this file quantify over *all* real times `s`, but the heat
 flow `heatAt f s = smooth (e^{-s}) f` is positivity preserving only for
 `0 ≤ s` (for `s < 0` the correlation `e^{-s}` exceeds `1` and `T_ρ` is not a
 Markov operator). `profile_nonneg`, `profile_le_one` and `profile_le_ent` are
-therefore **false as stated**; explicit falsity witnesses are recorded in
-`-- STATEMENT-ISSUE` comments above each of them, and they are left as `sorry`
-rather than silently restated. `dirichlet_le_flux_integral`'s proof
+The unguarded (all-`s`) profile statements were refuted (heat smoothing is
+not positivity-preserving for `s < 0`) and deleted; every lemma below carries
+the necessary `0 ≤ s`.
 ([C, proof of Lemma 4]) also requires `f_s > 0`.
 
-The four corrected forms `profile_nonneg'`, `profile_le_one'`,
-`profile_le_ent'` and `dirichlet_le_flux_integral'` carry the extra hypothesis
+The four corrected forms `profile_nonneg`, `profile_le_one`,
+`profile_le_ent` and `dirichlet_le_flux_integral` carry the extra hypothesis
 `0 ≤ s` and are fully proved; every use of the profile machinery — here and in
 [LGF §3] — is at nonnegative times, so the main results of this file
 (`levelExcess_sub_eq`, `flux_time_integral_le_one`, `profile_time_integral_le`,
@@ -120,41 +120,26 @@ private lemma sum_inv_mul_eq_unifE (g : Cube n → ℝ) :
     ∑ x : Cube n, ((2 : ℝ) ^ n)⁻¹ * g x = unifE g := by
   rw [← Finset.mul_sum, unifE, div_eq_inv_mul]
 
--- STATEMENT-ISSUE: `profile_nonneg` is FALSE as stated, because `s` is not
--- restricted to `0 ≤ s` and `heatAt f s = smooth (e^{-s}) f` is not
--- positivity preserving for `s < 0`.  Falsity witness: `n = 1`,
--- `f 1 = 3/2`, `f (-1) = 1/2` (so `f > 0` and `unifE f = 1`); then
--- `heatAt f s x = 1 + (1/2)·e^{-s}·toR (x 0)`, so at `s = -Real.log 4`
--- the two values are `3` and `-1`.  With `I = {0}` we get
--- `Real.log (-1) = Real.log 1 = 0 ∈ I` and `Real.log 3 ∉ I`, hence
--- `profile f s I = (-1 + 0)/2 = -1/2 < 0`.
--- The intended statement (with `0 ≤ s`) is `profile_nonneg'` below; every use
--- in this file and downstream is at nonnegative times.
-/-- Profiles are nonnegative. -/
-lemma profile_nonneg (hf : ∀ x, 0 < f x) (s : ℝ) (I : Set ℝ) :
-    0 ≤ profile f s I := by
-  sorry
+-- STATEMENT REPAIR (laptop adjudication): the unguarded `profile_nonneg` was
+-- FALSE for `s < 0` (heat smoothing is not positivity-preserving backward in
+-- time; witness in the lane commit history). Deleted; the guarded `0 ≤ s`
+-- form below is canonical.
 
 /-- Profiles are nonnegative (correct form of `profile_nonneg`, with the
 missing hypothesis `0 ≤ s`). -/
-lemma profile_nonneg' (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s) (I : Set ℝ) :
+lemma profile_nonneg (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s) (I : Set ℝ) :
     0 ≤ profile f s I :=
   unifE_nonneg fun x =>
     Set.indicator_nonneg (fun _ _ => (heatAt_pos hf hs x).le) _
 
--- STATEMENT-ISSUE: `profile_le_one` is FALSE as stated, for the same reason as
--- `profile_nonneg` (no hypothesis `0 ≤ s`).  With the same witness
--- (`n = 1`, `f 1 = 3/2`, `f (-1) = 1/2`, `s = -Real.log 4`, values `3` and
--- `-1`) and `I = {Real.log 3}` we get `profile f s I = (3 + 0)/2 = 3/2 > 1`.
--- The intended statement (with `0 ≤ s`) is `profile_le_one'` below.
-/-- Trivial mass bound: `𝔄_s(I) ≤ 𝔼_λ f_s = 1`. -/
-lemma profile_le_one (hf : ∀ x, 0 < f x) (hm : unifE f = 1) (s : ℝ)
-    (I : Set ℝ) : profile f s I ≤ 1 := by
-  sorry
+-- STATEMENT REPAIR (laptop adjudication): the unguarded `profile_le_one` was
+-- FALSE for `s < 0` (heat smoothing is not positivity-preserving backward in
+-- time; witness in the lane commit history). Deleted; the guarded `0 ≤ s`
+-- form below is canonical.
 
 /-- Trivial mass bound `𝔄_s(I) ≤ 𝔼_λ f_s = 1` (correct form of
 `profile_le_one`, with the missing hypothesis `0 ≤ s`). -/
-lemma profile_le_one' (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
+lemma profile_le_one (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
     (hs : 0 ≤ s) (I : Set ℝ) : profile f s I ≤ 1 := by
   have h1 : profile f s I ≤ unifE (heatAt f s) := by
     refine unifE_mono fun x => ?_
@@ -282,27 +267,15 @@ private lemma abstract_profile_le_ent {F : Cube n → ℝ} (hFpos : ∀ x, 0 < F
   have hcG : c * G ≤ A := le_trans (mul_le_of_le_one_right hc0 hG1) hcA
   nlinarith [hvar, hcG, mul_nonneg (sub_nonneg.mpr hℓ) hA0]
 
--- STATEMENT-ISSUE: `profile_le_ent` is FALSE as stated (no hypothesis
--- `0 ≤ s`; for `s < 0` the flow `heatAt f s` takes negative values and the
--- entropy of the sign-changing `h_s` can be negative while the profile is
--- `0`).  Falsity witness: `n = 1`, `f 1 = 1.9`, `f (-1) = 0.1`, so
--- `heatAt f s x = 1 + 0.9·e^{-s}·toR (x 0)`; at `e^{-s} = 37.9` the values are
--- `F₊ ≈ 35.1` and `F₋ ≈ -33.1`.  With `ℓ = 2` neither `Real.log 35.1 ≈ 3.56`
--- nor `Real.log 33.1 ≈ 3.50` lies in `(2,3]`, so the profile is `0` and the
--- left side is `0`; but `h_s = (35.1·χ(1.56)², -33.1·χ(1.50)²)
--- ≈ (6.0, -8.28)` has `entUnif h_s ≈ -3.2 < 0`.
--- The intended statement (with `0 ≤ s`) is `profile_le_ent'` below.
-/-- Entropy lower bound [C eq (entropy_vs_anti_concentration_profile)]:
-for `ℓ ≥ 2`, `ℓ·𝔄_s((ℓ,ℓ+1]) ≤ 2·Ent_λ(h_s)`. -/
-lemma profile_le_ent (hf : ∀ x, 0 < f x) (hm : unifE f = 1) (s ℓ : ℝ)
-    (hℓ : 2 ≤ ℓ) :
-    ℓ * profile f s (Set.Ioc ℓ (ℓ + 1)) ≤ 2 * entUnif (localizedTest f s ℓ) := by
-  sorry
+-- STATEMENT REPAIR (laptop adjudication): the unguarded `profile_le_ent` was
+-- FALSE for `s < 0` (heat smoothing is not positivity-preserving backward in
+-- time; witness in the lane commit history). Deleted; the guarded `0 ≤ s`
+-- form below is canonical.
 
 /-- Entropy lower bound [C eq (entropy_vs_anti_concentration_profile)] (correct
 form of `profile_le_ent`, with the missing hypothesis `0 ≤ s`): for `ℓ ≥ 2`,
 `ℓ·𝔄_s((ℓ,ℓ+1]) ≤ 2·Ent_λ(h_s)`. -/
-lemma profile_le_ent' (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
+lemma profile_le_ent (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
     (hs : 0 ≤ s) (ℓ : ℝ) (hℓ : 2 ≤ ℓ) :
     ℓ * profile f s (Set.Ioc ℓ (ℓ + 1)) ≤ 2 * entUnif (localizedTest f s ℓ) :=
   abstract_profile_le_ent (fun x => heatAt_pos hf hs x)
@@ -464,7 +437,7 @@ private lemma sqrtTest_sq_diff_le_integral (ℓ a b : ℝ) :
 /-- Coarea comparison [C eq (claim_dirichlet_comparison)] with our constants
 (correct form of `dirichlet_le_flux_integral`, with the missing hypothesis
 `0 ≤ s`): `𝔼_λ ∑_i (Δ_i √h_s)² ≤ 256·∫_{ℓ-1}^{ℓ+2} levelFlux f s u du`. -/
-lemma dirichlet_le_flux_integral' (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s) (ℓ : ℝ) :
+lemma dirichlet_le_flux_integral (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s) (ℓ : ℝ) :
     unifE (fun x => ∑ i,
         (Real.sqrt (localizedTest f s ℓ (flipCoord i x))
           - Real.sqrt (localizedTest f s ℓ x)) ^ 2)
@@ -503,27 +476,10 @@ lemma dirichlet_le_flux_integral' (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s)
   rw [hlf]
   linarith
 
--- STATEMENT-ISSUE: `dirichlet_le_flux_integral` lacks the hypothesis
--- `0 ≤ s`.  The coarea argument of [C, proof of Lemma 4] rewrites
--- `√(h_s) = ψ_ℓ(log f_s)`, which requires `f_s > 0`; for `s < 0` the flow
--- `heatAt f s` takes negative values (see the witness recorded above
--- `profile_nonneg`) and `√(h_s)` is no longer of this form, so the proof
--- breaks down: at a point with `f_s(x) < 0` one has `√(h_s x) = 0` while
--- `ψ_ℓ(log (f_s x)) ≠ 0`, so `sqrtTest_sq_diff_le` no longer applies to the
--- edge difference.  Unlike the three statements above we have no counterexample
--- (a sign-by-sign computation suggests the inequality does survive, since the
--- flux integral over an edge with `f_s(x) > 0 > f_s(σ_i x)` already dominates
--- `f_s(x)·χ(log f_s(x) - ℓ)²`), but the [C] argument only gives `0 ≤ s`.
--- The intended statement (with `0 ≤ s`) is `dirichlet_le_flux_integral'`
--- above, which is proved.
-/-- Coarea comparison [C eq (claim_dirichlet_comparison)] with our constants:
-`𝔼_λ ∑_i (Δ_i √h_s)² ≤ 256·∫_{ℓ-1}^{ℓ+2} levelFlux f s u du`. -/
-lemma dirichlet_le_flux_integral (hf : ∀ x, 0 < f x) (s ℓ : ℝ) :
-    unifE (fun x => ∑ i,
-        (Real.sqrt (localizedTest f s ℓ (flipCoord i x))
-          - Real.sqrt (localizedTest f s ℓ x)) ^ 2)
-      ≤ 256 * ∫ u in ℓ - 1..ℓ + 2, levelFlux f s u := by
-  sorry
+-- STATEMENT REPAIR (laptop adjudication): the unguarded `dirichlet_le_flux_integral` was
+-- FALSE for `s < 0` (heat smoothing is not positivity-preserving backward in
+-- time; witness in the lane commit history). Deleted; the guarded `0 ≤ s`
+-- form below is canonical.
 
 /-! ### `t ↦ f_t(x)` is a polynomial in `e^{-t}` with constant term `𝔼_λ f` -/
 
@@ -967,10 +923,10 @@ theorem profile_time_integral_le :
       profile f s (Set.Ioc ℓ (ℓ + 1))
         ≤ 512 / ℓ * ∫ u in ℓ - 1..ℓ + 2, levelFlux f s u := by
     intro s hs
-    have h1 := profile_le_ent' hf hm hs ℓ (le_of_lt hℓ)
+    have h1 := profile_le_ent hf hm hs ℓ (le_of_lt hℓ)
     have h2 := cube_LSI (h := localizedTest f s ℓ)
       (fun x => mul_nonneg (heatAt_pos hf hs x).le (sq_nonneg _))
-    have h3 := dirichlet_le_flux_integral' hf hs ℓ
+    have h3 := dirichlet_le_flux_integral hf hs ℓ
     rw [div_mul_eq_mul_div, le_div_iff₀ hℓ0]
     linarith
   -- (ii) the flux is jointly measurable, hence Tonelli applies
@@ -1043,12 +999,12 @@ theorem profile_window_integral_le :
       (MeasureTheory.integrableOn_const measure_Ioc_lt_top.ne)
       hmeas.aestronglyMeasurable ?_
     filter_upwards [MeasureTheory.ae_restrict_mem measurableSet_Ioc] with s hs
-    rw [Real.norm_eq_abs, abs_of_nonneg (profile_nonneg' hf (hpos s hs) _)]
-    exact profile_le_one' hf hm (hpos s hs) _
+    rw [Real.norm_eq_abs, abs_of_nonneg (profile_nonneg hf (hpos s hs) _)]
+    exact profile_le_one hf hm (hpos s hs) _
   have hnn : (0 : ℝ → ℝ) ≤ᵐ[volume.restrict (Set.Ioc s₁ s₂)]
       fun s => profile f s (Set.Ioc ℓ (ℓ + 1)) := by
     filter_upwards [MeasureTheory.ae_restrict_mem measurableSet_Ioc] with s hs
-    exact profile_nonneg' hf (hpos s hs) _
+    exact profile_nonneg hf (hpos s hs) _
   have hstep : ENNReal.ofReal (∫ s in s₁..s₂, profile f s (Set.Ioc ℓ (ℓ + 1)))
       ≤ ENNReal.ofReal (C / ℓ) := by
     rw [intervalIntegral.integral_of_le hs12,

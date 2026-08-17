@@ -240,35 +240,47 @@ lemma a_mul_gam_T : D.a * gam D.T = 1 := by
   have h := D.exp_neg_T_sub D.T
   simpa using h.symm
 
--- STATEMENT-ISSUE: this hypothesis-free form is FALSE at the single time
--- `t = D.T` (where `γ_T = 1/a`, so `1 - a²γ_T² = 0`). There both `a_t` and
--- `b_t` are junk (`x/0 = 0`) while their limits are infinite/nonzero, so
--- `s ↦ m_s^{[i]}` is discontinuous at `T` and no derivative exists, whereas
--- the stated RHS evaluates to `0`. Falsity witness: `n = 1`, `y i = 1`,
--- `x i = ζ i = 1`, `t = D.T`: the LHS function tends to
--- `(a + a⁻¹)/2 ≠ 0 = m_T^{[i]}`. The intended statement carries `t ≤ obsT`
--- (or `t ≠ D.T`); `hasDerivAt_mB_of_ne` above proves exactly that, and every
--- downstream use in this file is inside `t ≤ obsT`. Replacing the hypothesis
--- closes this `sorry` by `exact D.hasDerivAt_mB_of_ne (ne_of_gt (D.den_pos ht)) ..`.
+-- STATEMENT REPAIR (laptop adjudication of the lane's STATEMENT-ISSUE): the
+-- original hypothesis-free `hasDerivAt_mB` was FALSE at the single time
+-- `t = D.T` (there `aγ_T = 1`, `1 - a²γ_T² = 0`, both `a_t, b_t` junk
+-- `x/0 = 0`, and `s ↦ m_s^{[i]}` is discontinuous — witness `n = 1`,
+-- `x i = y i = ζ i = 1`: the function tends to `(a + a⁻¹)/2 ≠ 0 = m_T`).
+-- The refuted form (and its unguarded consumers `hasDerivAt_qB`,
+-- `hasDerivAt_qB_sq`) now carry the necessary guard `t ≠ D.T`; every
+-- downstream use has `t < D.T`.
+
+/-- `1 - a²γ_t² ≠ 0` away from the degenerate time: `aγ_t = e^{-(T-t)} = 1`
+iff `t = T`. -/
+lemma den_ne_of_ne {t : ℝ} (ht : t ≠ D.T) : 1 - D.a ^ 2 * gam t ^ 2 ≠ 0 := by
+  intro h0
+  apply ht
+  have hexp : Real.exp (-(D.T - t)) ^ 2 = 1 := by
+    rw [D.exp_neg_T_sub]; nlinarith
+  have h1 : Real.exp (-(2 * (D.T - t))) = Real.exp 0 := by
+    rw [Real.exp_zero, ← hexp, ← Real.exp_nat_mul]
+    ring_nf
+  have := Real.exp_injective h1
+  linarith
+
 /-- Coefficient ODE: `d/dt m_t^{[i]} = λ_{t,i}^ζ(x)·a_t·y_i` (equivalently
 the pair of scalar ODEs for `a_t ± b_t`) [LGF §5.2, harmonicity of the
-bridge]. -/
-lemma hasDerivAt_mB (t : ℝ) (x y ζ : Cube n) (i : Fin n) :
+bridge]. Guarded by `t ≠ D.T` (necessary: see the repair note above). -/
+lemma hasDerivAt_mB {t : ℝ} (ht : t ≠ D.T) (x y ζ : Cube n) (i : Fin n) :
     HasDerivAt (fun t => D.mB t x y ζ i)
-      (D.lam t i x ζ * D.aB t * toR (y i)) t := by
-  sorry
+      (D.lam t i x ζ * D.aB t * toR (y i)) t :=
+  D.hasDerivAt_mB_of_ne (D.den_ne_of_ne ht) x y ζ i
 
 /-- **Space-time harmonicity of the bridge** under the conditioned
 synchronized generator [LGF Lemma 4.4]:
 `∂_t q_t^ζ(x,y) + ½∑_i λ_{t,i}^ζ(x)·Δ_i^{xy}q_t^ζ(x,y) = 0`. -/
-theorem hasDerivAt_qB (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) :
+theorem hasDerivAt_qB (φ : Cube n → ℝ) {t : ℝ} (ht : t ≠ D.T) (ζ x y : Cube n) :
     HasDerivAt (fun t => D.qB φ t ζ x y)
       (-(∑ i, D.lam t i x ζ *
           (D.qB φ t ζ (flipCoord i x) (flipCoord i y) - D.qB φ t ζ x y) / 2))
       t := by
   have h := hasDerivAt_mext_comp φ (fun s => D.mB s x y ζ)
     (fun i => D.lam t i x ζ * D.aB t * toR (y i)) t
-    (fun i => D.hasDerivAt_mB t x y ζ i)
+    (fun i => D.hasDerivAt_mB ht x y ζ i)
   convert h using 1
   have key : ∀ i : Fin n,
       D.lam t i x ζ * (D.qB φ t ζ (flipCoord i x) (flipCoord i y) - D.qB φ t ζ x y) / 2
@@ -278,14 +290,14 @@ theorem hasDerivAt_qB (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) :
 
 /-- **Carré du champ** [LGF eq (4.9)]:
 `(∂_t + 𝓛^{0,ζ})(q_t^ζ)² = 2a_t²∑_i λ_{t,i}^ζ|∂_iφ(m_t)|²`. -/
-theorem hasDerivAt_qB_sq (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) :
+theorem hasDerivAt_qB_sq (φ : Cube n → ℝ) {t : ℝ} (ht : t ≠ D.T) (ζ x y : Cube n) :
     HasDerivAt (fun t => D.qB φ t ζ x y ^ 2)
       (-(∑ i, D.lam t i x ζ *
             (D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
               - D.qB φ t ζ x y ^ 2) / 2)
         + 2 * D.aB t ^ 2 * ∑ i, D.lam t i x ζ
             * dmext φ i (D.mB t x y ζ) ^ 2) t := by
-  have h := (D.hasDerivAt_qB φ t ζ x y).pow 2
+  have h := (D.hasDerivAt_qB φ ht ζ x y).pow 2
   convert h using 1
   have hqF : ∀ i : Fin n, D.qB φ t ζ (flipCoord i x) (flipCoord i y)
       = D.qB φ t ζ x y + (-2 * D.aB t * toR (y i) * dmext φ i (D.mB t x y ζ)) := by

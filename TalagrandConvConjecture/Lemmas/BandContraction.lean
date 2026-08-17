@@ -311,7 +311,7 @@ theorem Aband_summable {ℓ θ : ℝ} (hℓ : 0 < ℓ) (hθ0 : 0 ≤ θ) (hθ : 
   refine Summable.of_nonneg_of_le (fun j => ?_) (fun j => ?_) hgeo
   · exact mul_nonneg (Real.exp_pos _).le (D.Aband_nonneg hθ0 hθ Φ A _)
   · have h1 : D.Aband Φ A (ℓ + (j : ℝ) + 1) ≤ 1 :=
-      (D.Aband_le_profile hθ0 hθ Φ A _).trans (profile_le_one D.hf D.hm _ _)
+      (D.Aband_le_profile hθ0 hθ Φ A _).trans (profile_le_one D.hf D.hm D.tA_pos.le _)
     have h2 : Real.exp (-((j : ℝ) + 1)) ≤ Real.exp (-1 : ℝ) ^ j := by
       rw [show -((j : ℝ) + 1) = -(j : ℝ) + -1 by ring, Real.exp_add,
         exp_neg_nat j]
