@@ -43,6 +43,7 @@ theorem term_V_tail_le {ℓ θ : ℝ} (hθ0 : 0 ≤ θ) (hθ : θ ≤ obsT) {x�
       ≤ Real.exp (cLev - D.F θ x₀) := by
   sorry
 
+open Classical in
 /-- The `V`-terminal band mass over all starting points is the profile:
 `∑_{x₀} ν_{T-θ}(x₀)·𝔼_{x₀}[1_{F_{T_o}(V) ∈ I}] = 𝔄_{t_a}(I)`
 [LGF eq (3.14), `V_{T_o} ∼ ν_{t_a}`]. -/
