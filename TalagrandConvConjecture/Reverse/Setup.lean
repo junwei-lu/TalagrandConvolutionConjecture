@@ -486,12 +486,71 @@ lemma lam_pos {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x ζ : Cube n) :
     0 < D.lam t i x ζ :=
   lt_of_lt_of_le (inv_pos.mpr D.kappa_pos) (D.kappa_inv_le_lam ht i x ζ)
 
+/-- `d/dt e^{-(T-t)} = e^{-(T-t)}`. -/
+lemma hasDerivAt_rho (t : ℝ) :
+    HasDerivAt (fun t => Real.exp (-(D.T - t))) (Real.exp (-(D.T - t))) t := by
+  have h0 : HasDerivAt (fun u : ℝ => D.T - u) (-1) t := by
+    simpa using (hasDerivAt_const t D.T).sub (hasDerivAt_id t)
+  have h1 := h0.neg
+  rw [neg_neg] at h1
+  simpa using h1.exp
+
+/-- Time derivative of the Bayes kernel: `∂_t kern = kern·∑_j (1-λ_j)/2`. -/
+lemma hasDerivAt_kern {t : ℝ} (ht : t < D.T) (ζ x : Cube n) :
+    HasDerivAt (fun t => D.kern t ζ x)
+      (D.kern t ζ x * ∑ j, (1 - D.lam t j x ζ) / 2) t := by
+  have hfac : ∀ j : Fin n, HasDerivAt
+      (fun t => (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2)
+      (Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j) / 2) t := fun j =>
+    ((((D.hasDerivAt_rho t).mul_const (toR (x j))).mul_const
+      (toR (ζ j))).const_add 1).div_const 2
+  have h := HasDerivAt.fun_finset_prod (u := (Finset.univ : Finset (Fin n)))
+    (f := fun (j : Fin n) (t : ℝ) => (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2)
+    (f' := fun (j : Fin n) => Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j) / 2)
+    (x := t) (fun j _ => hfac j)
+  simp only [kern]
+  convert h using 1
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl fun j _ => ?_
+  have hne : (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) ≠ 0 :=
+    (D.factor_pos ht j ζ x).ne'
+  rw [← Finset.mul_prod_erase Finset.univ
+      (fun k => (1 + Real.exp (-(D.T - t)) * toR (x k) * toR (ζ k)) / 2)
+      (Finset.mem_univ j), smul_eq_mul]
+  simp only [lam]
+  field_simp
+  ring
+
 /-- Space-time harmonicity of the terminal likelihood:
 `∂_t H_t^ζ(x) = -L̃_t(H_t^ζ)(x)` [LGF §4.1 / Lemma 5.1]. -/
 lemma hasDerivAt_Hlik {t : ℝ} (ht : t < D.T) (ζ x : Cube n) :
     HasDerivAt (fun t => D.Hlik t ζ x)
       (-(D.revGen t (fun y => D.Hlik t ζ y) x)) t := by
-  sorry
+  have hfx := D.fs_ne_zero (D.T_sub_nonneg ht.le) x
+  have hnum : HasDerivAt (fun t => D.kern t ζ x * D.f ζ)
+      (D.kern t ζ x * (∑ j, (1 - D.lam t j x ζ) / 2) * D.f ζ) t :=
+    (D.hasDerivAt_kern ht ζ x).mul_const _
+  have hd := hnum.div (D.hasDerivAt_fs_sub t x) hfx
+  have hrev : D.revGen t (fun y => D.Hlik t ζ y) x
+      = D.Hlik t ζ x * ∑ i, (D.lam t i x ζ - D.Y t i x) / 2 := by
+    simp only [revGen, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    have hff := D.fs_ne_zero (D.T_sub_nonneg ht.le) (flipCoord i x)
+    simp only [D.Hlik_eq, D.kern_flipCoord ht i ζ x, Y]
+    field_simp
+  have hzero : (∑ j, (1 - D.lam t j x ζ) / 2) + (∑ i, (D.Y t i x - 1) / 2)
+      + ∑ i, (D.lam t i x ζ - D.Y t i x) / 2 = 0 := by
+    rw [← Finset.sum_add_distrib, ← Finset.sum_add_distrib]
+    refine Finset.sum_eq_zero fun i _ => ?_
+    ring
+  have hC : (∑ i, (D.lam t i x ζ - D.Y t i x) / 2)
+      = -((∑ j, (1 - D.lam t j x ζ) / 2) + (∑ i, (D.Y t i x - 1) / 2)) := by linarith
+  rw [hrev]
+  simp only [D.Hlik_eq]
+  convert hd using 1
+  rw [hC, D.cubeLap_fs_eq ht.le x]
+  field_simp
+  ring
 
 end Dat
 
