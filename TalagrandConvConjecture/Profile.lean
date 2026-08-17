@@ -289,6 +289,28 @@ lemma profile_le_ent' (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
   abstract_profile_le_ent (fun x => heatAt_pos hf hs x)
     (by rw [unifE_heatAt, hm]) hℓ
 
+/-- Measurability in `s` of the profile (finite sum of continuous×indicator). -/
+lemma measurable_profile (hf : ∀ x, 0 < f x) (I : Set ℝ) (hI : MeasurableSet I) :
+    Measurable fun s => profile f s I := by
+  have key : Measurable fun s => ∑ x : Cube n,
+      I.indicator (fun _ => heatAt f s x) (Real.log (heatAt f s x)) := by
+    refine Finset.measurable_sum _ fun x _ => ?_
+    have h1 : Measurable fun s => heatAt f s x := (continuous_heatAt f x).measurable
+    have h2 : MeasurableSet {s : ℝ | Real.log (heatAt f s x) ∈ I} :=
+      (Real.measurable_log.comp h1) hI
+    have heq : (fun s => I.indicator (fun _ => heatAt f s x) (Real.log (heatAt f s x)))
+        = {s : ℝ | Real.log (heatAt f s x) ∈ I}.indicator (fun s => heatAt f s x) := by
+      funext s
+      by_cases hs : Real.log (heatAt f s x) ∈ I
+      · rw [Set.indicator_of_mem hs,
+          Set.indicator_of_mem (show s ∈ {s : ℝ | Real.log (heatAt f s x) ∈ I} from hs)]
+      · rw [Set.indicator_of_notMem hs,
+          Set.indicator_of_notMem (show s ∉ {s : ℝ | Real.log (heatAt f s x) ∈ I} from hs)]
+    rw [heq]
+    exact h1.indicator h2
+  simp only [profile, unifE]
+  exact key.div_const _
+
 /-! ### The level flux as an indicator sum
 
 `levelFlux` is defined with a classical `if`; the following instance-free
@@ -984,29 +1006,32 @@ theorem profile_window_integral_le :
     ∃ C : ℝ, 0 < C ∧ ∀ {n : ℕ} (f : Cube n → ℝ), (∀ x, 0 < f x) →
       unifE f = 1 → ∀ ℓ : ℝ, 2 < ℓ → ∀ s₁ s₂ : ℝ, 0 ≤ s₁ → s₁ ≤ s₂ →
       ∫ s in s₁..s₂, profile f s (Set.Ioc ℓ (ℓ + 1)) ≤ C / ℓ := by
-  sorry
-
-/-- Measurability in `s` of the profile (finite sum of continuous×indicator). -/
-lemma measurable_profile (hf : ∀ x, 0 < f x) (I : Set ℝ) (hI : MeasurableSet I) :
-    Measurable fun s => profile f s I := by
-  have key : Measurable fun s => ∑ x : Cube n,
-      I.indicator (fun _ => heatAt f s x) (Real.log (heatAt f s x)) := by
-    refine Finset.measurable_sum _ fun x _ => ?_
-    have h1 : Measurable fun s => heatAt f s x := (continuous_heatAt f x).measurable
-    have h2 : MeasurableSet {s : ℝ | Real.log (heatAt f s x) ∈ I} :=
-      (Real.measurable_log.comp h1) hI
-    have heq : (fun s => I.indicator (fun _ => heatAt f s x) (Real.log (heatAt f s x)))
-        = {s : ℝ | Real.log (heatAt f s x) ∈ I}.indicator (fun s => heatAt f s x) := by
-      funext s
-      by_cases hs : Real.log (heatAt f s x) ∈ I
-      · rw [Set.indicator_of_mem hs,
-          Set.indicator_of_mem (show s ∈ {s : ℝ | Real.log (heatAt f s x) ∈ I} from hs)]
-      · rw [Set.indicator_of_notMem hs,
-          Set.indicator_of_notMem (show s ∉ {s : ℝ | Real.log (heatAt f s x) ∈ I} from hs)]
-    rw [heq]
-    exact h1.indicator h2
-  simp only [profile, unifE]
-  exact key.div_const _
+  obtain ⟨C, hC0, hC⟩ := profile_time_integral_le
+  refine ⟨C, hC0, ?_⟩
+  intro n f hf hm ℓ hℓ s₁ s₂ hs1 hs12
+  have hℓ0 : (0 : ℝ) < ℓ := by linarith
+  have hmeas : Measurable fun s => profile f s (Set.Ioc ℓ (ℓ + 1)) :=
+    measurable_profile hf _ measurableSet_Ioc
+  have hpos : ∀ s ∈ Set.Ioc s₁ s₂, 0 ≤ s := fun s hs => le_trans hs1 hs.1.le
+  have hIo : MeasureTheory.IntegrableOn
+      (fun s => profile f s (Set.Ioc ℓ (ℓ + 1))) (Set.Ioc s₁ s₂) volume := by
+    refine MeasureTheory.Integrable.mono' (g := fun _ : ℝ => (1 : ℝ))
+      (MeasureTheory.integrableOn_const measure_Ioc_lt_top.ne)
+      hmeas.aestronglyMeasurable ?_
+    filter_upwards [MeasureTheory.ae_restrict_mem measurableSet_Ioc] with s hs
+    rw [Real.norm_eq_abs, abs_of_nonneg (profile_nonneg' hf (hpos s hs) _)]
+    exact profile_le_one' hf hm (hpos s hs) _
+  have hnn : (0 : ℝ → ℝ) ≤ᵐ[volume.restrict (Set.Ioc s₁ s₂)]
+      fun s => profile f s (Set.Ioc ℓ (ℓ + 1)) := by
+    filter_upwards [MeasureTheory.ae_restrict_mem measurableSet_Ioc] with s hs
+    exact profile_nonneg' hf (hpos s hs) _
+  have hstep : ENNReal.ofReal (∫ s in s₁..s₂, profile f s (Set.Ioc ℓ (ℓ + 1)))
+      ≤ ENNReal.ofReal (C / ℓ) := by
+    rw [intervalIntegral.integral_of_le hs12,
+      MeasureTheory.ofReal_integral_eq_lintegral_ofReal hIo hnn]
+    refine le_trans (MeasureTheory.lintegral_mono_set ?_) (hC f hf hm ℓ hℓ)
+    exact fun s hs => lt_of_le_of_lt hs1 hs.1
+  exact (ENNReal.ofReal_le_ofReal_iff (by positivity)).1 hstep
 
 end Positive
 
