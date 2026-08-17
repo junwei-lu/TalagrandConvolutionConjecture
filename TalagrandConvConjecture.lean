@@ -14,3 +14,12 @@ import TalagrandConvConjecture.ODE.LinearFlow
 import TalagrandConvConjecture.Reverse.Setup
 import TalagrandConvConjecture.Bridge
 import TalagrandConvConjecture.PowerCoupling
+import TalagrandConvConjecture.Flow.Glued
+import TalagrandConvConjecture.Flow.Coupling
+import TalagrandConvConjecture.Lemmas.Quantities
+import TalagrandConvConjecture.Lemmas.ScoreEnergy
+import TalagrandConvConjecture.Lemmas.Supermartingale
+import TalagrandConvConjecture.Lemmas.BandContraction
+import TalagrandConvConjecture.Lemmas.Discrepancy
+import TalagrandConvConjecture.FixedBand
+import TalagrandConvConjecture.Main

@@ -42,28 +42,11 @@ noncomputable def psi (a : ℝ) (n : ℕ) (u : ℝ) : ℝ :=
   ⨆ f : {f : Cube n → ℝ // (∀ x, 0 ≤ f x) ∧ unifE f = 1},
     u * unifMeas {x | u ≤ biasedConv a f.1 x}
 
-/-- **Talagrand's convolution conjecture** [LGF Theorem 1.1], pointwise-in-`f`
-form: there is a universal constant `C` such that for every dimension `n`,
-bias `0 < a < 1`, level `u > 1`, and probability density `f` on the cube
-(`f ≥ 0`, `𝔼_λ f = 1`),
-`u·λ({T_{μ_a} f ≥ u}) ≤ C·K_a/√(log u)`. -/
-theorem talagrand_convolution_conjecture :
-    ∃ C : ℝ, 0 < C ∧
-      ∀ (n : ℕ) (a u : ℝ) (f : Cube n → ℝ),
-        0 < a → a < 1 → 1 < u → (∀ x, 0 ≤ f x) → unifE f = 1 →
-        u * unifMeas {x | u ≤ biasedConv a f x}
-          ≤ C * Ka a / Real.sqrt (Real.log u) := by
-  sorry
+/-! The headline theorems `talagrand_convolution_conjecture` (pointwise form)
+and `talagrand_convolution_conjecture_psi` (`ψ`-form) are stated and proved
+in `Main.lean`, using only the definitions of this file in their statements.
 
-/-- **Talagrand's convolution conjecture**, `ψ`-form [LGF eq (1.1)]:
-`ψ_{μ_a}(u) ≤ C·K_a/√(log u)` for all `0 < a < 1`, `u > 1`, `n`. -/
-theorem talagrand_convolution_conjecture_psi :
-    ∃ C : ℝ, 0 < C ∧
-      ∀ (n : ℕ) (a u : ℝ), 0 < a → a < 1 → 1 < u →
-        psi a n u ≤ C * Ka a / Real.sqrt (Real.log u) := by
-  sorry
-
-/-! ### Basic facts making the statement well-posed -/
+### Basic facts making the statement well-posed -/
 
 lemma one_lt_kappa {a : ℝ} (ha0 : 0 < a) (ha1 : a < 1) : 1 < kappa a := by
   rw [kappa, lt_div_iff₀ (by linarith)]
