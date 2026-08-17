@@ -441,16 +441,21 @@ private lemma continuousOn_jrate {d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤ 1)
   (D.continuousOn_jrateC hd0 hd1 B s s' hbT).congr
     fun t ht => D.jrate_eq_jrateC hd0 B (le_trans ht.2 hbT) s s'
 
-private lemma continuousOn_cellGen {ℓ θ d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤ 1)
-    (z : ℕ → ℝ) (k : ℕ) (hbT : z (k + 1) ≤ D.T) (s s' : JSt n) :
-    ContinuousOn (fun t => D.cellGen ℓ θ d z k t s s')
-      (Set.Icc (z k) (z (k + 1))) := by
+private lemma continuousOn_fwdOf {d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤ 1)
+    (B : Set (Cube n)) {a b : ℝ} (hbT : b ≤ D.T) (s s' : JSt n) :
+    ContinuousOn (fun t => fwdOf (D.jrate d B t) s s') (Set.Icc a b) := by
   classical
-  simp only [cellGen, fwdOf]
+  simp only [fwdOf]
   refine ContinuousOn.sub (D.continuousOn_jrate hd0 hd1 _ _ _ hbT) ?_
   exact continuousOn_if_const _
     (continuousOn_finset_sum _ fun s'' _ =>
       D.continuousOn_jrate hd0 hd1 _ _ _ hbT) continuousOn_const
+
+private lemma continuousOn_cellGen {ℓ θ d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤ 1)
+    (z : ℕ → ℝ) (k : ℕ) (hbT : z (k + 1) ≤ D.T) (s s' : JSt n) :
+    ContinuousOn (fun t => D.cellGen ℓ θ d z k t s s')
+      (Set.Icc (z k) (z (k + 1))) :=
+  D.continuousOn_fwdOf hd0 hd1 _ hbT s s'
 
 private lemma jrate_nonneg {d : ℝ} (hd0 : 0 ≤ d) (hd1 : d ≤ 1)
     (B : Set (Cube n)) {t : ℝ} (ht : t ≤ D.T) (s s' : JSt n) :
@@ -515,6 +520,141 @@ private lemma initVec_sum (x₀ : Cube n) : ∑ s, initVec (n := n) x₀ s = 1 :
   classical
   simp only [initVec]
   simp
+
+/-! ### The alive sector avoids the barrier -/
+
+/-- The cell barrier (sampled at the midpoint) is contained in the barrier at
+the left node: a state acquiring the barrier strictly inside the cell would
+force a crossing there. -/
+private lemma barrier_mid_subset {ℓ θ : ℝ} {K : ℕ} {z : ℕ → ℝ}
+    (hg : D.AdmissibleGrid ℓ θ K z) {k : ℕ} (hk : k < K) {x : Cube n}
+    (hx : x ∈ D.barrier ℓ ((z k + z (k + 1)) / 2)) : x ∈ D.barrier ℓ (z k) := by
+  by_contra hcon
+  simp only [barrier, Set.mem_setOf_eq, not_le] at hcon hx
+  have hzmono : z k ≤ z (k + 1) := hg.mono k hk
+  have hmid : z k ≤ (z k + z (k + 1)) / 2 := by linarith
+  have hmidT : (z k + z (k + 1)) / 2 ≤ D.T := by
+    have h1 : z (k + 1) ≤ obsT := D.grid_le_obsT hg (Nat.succ_le_of_lt hk)
+    have h2 : z k ≤ obsT := D.grid_le_obsT hg (le_of_lt hk)
+    have := D.obsT_lt_T
+    linarith
+  obtain ⟨cc, hcc, hcc2⟩ := D.exists_cross hmid hmidT x (Or.inl ⟨hcon, hx⟩)
+  have hne1 : z k < cc :=
+    lt_of_le_of_ne hcc.1 (by intro hEq; rw [← hEq] at hcc2; linarith)
+  have hlt : z k < z (k + 1) := by linarith [hcc.2]
+  exact hg.nocross k hk cc ⟨hne1, by linarith [hcc.2]⟩ x hcc2
+
+/-- The node transfer clears alive mass on the barrier at the node time. -/
+private lemma killTr_kills {ℓ t : ℝ} (v : JSt n → ℝ) {s : JSt n}
+    (hs1 : s.2.2 = true) (hs2 : s.1 ∈ D.barrier ℓ t) :
+    matVec (D.killTr ℓ t) v s = 0 := by
+  classical
+  obtain ⟨x, y, b⟩ := s
+  simp only at hs1 hs2
+  subst hs1
+  refine Finset.sum_eq_zero fun s' _ => ?_
+  obtain ⟨x', y', b'⟩ := s'
+  have hdec : decide (x ∉ D.barrier ℓ t) = false := by simp [hs2]
+  have hz : D.killTr ℓ t (x, y, true) (x', y', b') = 0 := by
+    simp only [killTr]
+    refine if_neg ?_
+    rintro ⟨hxx, -, h3⟩
+    rw [← hxx, hdec, Bool.and_false] at h3
+    exact Bool.noConfusion h3
+  rw [hz, zero_mul]
+
+/-- No alive in-flux to a barred state from a state that is not itself alive
+and barred: sync and `V`-only jumps land alive only off the barrier, and
+`W`-only jumps do not move the `V`-coordinate. -/
+private lemma jrate_into_bad {d : ℝ} {B : Set (Cube n)} {t : ℝ} {s s' : JSt n}
+    (hs1 : s.2.2 = true) (hs2 : s.1 ∈ B) (hs' : ¬ (s'.2.2 = true ∧ s'.1 ∈ B)) :
+    D.jrate d B t s' s = 0 := by
+  classical
+  obtain ⟨x, y, b⟩ := s
+  obtain ⟨x'', y'', b''⟩ := s'
+  simp only at hs1 hs2 hs'
+  subst hs1
+  simp only [jrate]
+  refine Finset.sum_eq_zero fun i _ => ?_
+  have hdec : decide (x ∉ B) = false := by simp [hs2]
+  rcases Bool.eq_false_or_eq_true b'' with hb | hb
+  · have hxne : x ≠ x'' := fun hEq => hs' ⟨hb, by rw [← hEq]; exact hs2⟩
+    simp [hb, hdec, hxne]
+  · simp [hb, hdec]
+
+open Classical in
+/-- **Cell invariant**: alive mass never sits on the cell barrier. The
+alive-and-barred states form a closed sub-system (no in-flux from other
+states) with zero initial data, hence carry no mass, by uniqueness for the
+truncated generator. -/
+private lemma cell_alive_zero {d : ℝ} {B : Set (Cube n)} {a b : ℝ}
+    (hd0 : 0 ≤ d) (hd1 : d ≤ 1) (hab : a ≤ b) (hbT : b ≤ D.T)
+    {π : ℝ → JSt n → ℝ}
+    (hflow : IsLinFlow (fun t => fwdOf (D.jrate d B t)) a b π)
+    (h0 : ∀ s : JSt n, s.2.2 = true → s.1 ∈ B → π a s = 0) :
+    ∀ t ∈ Set.Icc a b, ∀ s : JSt n, s.2.2 = true → s.1 ∈ B → π t s = 0 := by
+  classical
+  -- no in-flux into an alive barred state from any other state
+  have hnoflux : ∀ (t : ℝ) (u v : JSt n), (u.2.2 = true ∧ u.1 ∈ B) →
+      ¬ (v.2.2 = true ∧ v.1 ∈ B) → fwdOf (D.jrate d B t) u v = 0 := by
+    intro t u v hu hv
+    have hne : u ≠ v := fun hEq => hv (hEq ▸ hu)
+    simp only [fwdOf, if_neg hne, sub_zero]
+    exact D.jrate_into_bad hu.1 hu.2 hv
+  -- the truncated generator and the barred part of the flow
+  obtain ⟨A', hA'⟩ : ∃ A' : ℝ → JSt n → JSt n → ℝ, A' = fun t u v =>
+      if (u.2.2 = true ∧ u.1 ∈ B) ∧ (v.2.2 = true ∧ v.1 ∈ B) then
+        fwdOf (D.jrate d B t) u v else 0 := ⟨_, rfl⟩
+  obtain ⟨σ, hσ⟩ : ∃ σ : ℝ → JSt n → ℝ, σ = fun t s =>
+      if s.2.2 = true ∧ s.1 ∈ B then π t s else 0 := ⟨_, rfl⟩
+  have hA'cont : ∀ u v : JSt n, ContinuousOn (fun t => A' t u v) (Set.Icc a b) := by
+    intro u v
+    rw [hA']
+    exact continuousOn_if_const _ (D.continuousOn_fwdOf hd0 hd1 B hbT u v)
+      continuousOn_const
+  have hmv : ∀ (t : ℝ) (s : JSt n), (s.2.2 = true ∧ s.1 ∈ B) →
+      matVec (A' t) (σ t) s = matVec (fwdOf (D.jrate d B t)) (π t) s := by
+    intro t s hs
+    simp only [matVec]
+    refine Finset.sum_congr rfl fun v _ => ?_
+    by_cases hv : v.2.2 = true ∧ v.1 ∈ B
+    · rw [hA', hσ]
+      simp only [if_pos hv, if_pos (And.intro hs hv)]
+    · rw [hnoflux t s v hs hv, hA', hσ]
+      simp only [if_neg hv, if_neg (fun h : (s.2.2 = true ∧ s.1 ∈ B) ∧
+        (v.2.2 = true ∧ v.1 ∈ B) => hv h.2), zero_mul, mul_zero]
+  have h1 : IsLinFlow A' a b σ := by
+    refine ⟨fun s => ?_, fun s t ht => ?_⟩
+    · by_cases hs : s.2.2 = true ∧ s.1 ∈ B
+      · rw [hσ]; simpa only [if_pos hs] using hflow.cont s
+      · rw [hσ]; simpa only [if_neg hs] using
+          (continuousOn_const : ContinuousOn (fun _ : ℝ => (0 : ℝ)) (Set.Icc a b))
+    · by_cases hs : s.2.2 = true ∧ s.1 ∈ B
+      · rw [hmv t s hs, hσ]
+        simpa only [if_pos hs] using hflow.deriv s t ht
+      · have hzero : matVec (A' t) (σ t) s = 0 := by
+          simp only [matVec, hA']
+          refine Finset.sum_eq_zero fun v _ => ?_
+          rw [if_neg (fun h : (s.2.2 = true ∧ s.1 ∈ B) ∧
+            (v.2.2 = true ∧ v.1 ∈ B) => hs h.1), zero_mul]
+        rw [hzero, hσ]
+        simpa only [if_neg hs] using
+          (hasDerivWithinAt_const t (Set.Icc a b) (0 : ℝ))
+  have h2 : IsLinFlow A' a b (fun _ _ => 0) := by
+    refine ⟨fun s => continuousOn_const, fun s t ht => ?_⟩
+    have hzero : matVec (A' t) (fun _ => (0 : ℝ)) s = 0 := by simp [matVec]
+    rw [hzero]
+    exact hasDerivWithinAt_const _ _ _
+  have hinit : σ a = (fun _ => (0 : ℝ)) := by
+    funext s
+    by_cases hs : s.2.2 = true ∧ s.1 ∈ B
+    · rw [hσ]; simp only [if_pos hs]; exact h0 s hs.1 hs.2
+    · rw [hσ]; simp only [if_neg hs]
+  have huniq := linFlow_unique hab hA'cont h1 h2 hinit
+  intro t ht s hs1 hs2
+  have hthis := congrFun (huniq t ht) s
+  rw [hσ] at hthis
+  simpa only [if_pos (And.intro hs1 hs2)] using hthis
 
 /-- `IsCouplingFlow D ℓ θ x₀ K z π`: `π` is a glued flow for the stopped
 power coupling started at `(x₀, x₀)` at time `θ`, on the admissible grid
