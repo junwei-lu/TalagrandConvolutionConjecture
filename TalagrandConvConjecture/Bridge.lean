@@ -100,26 +100,53 @@ end ranges
 
 section identities
 
+/-- Affine-difference form of `mext_update`: changing the `i`-th coordinate
+from `z i` to `s` changes `mext φ` by `(s - z i)·∂_iφ`. -/
+lemma mext_update_sub (φ : Cube n → ℝ) (i : Fin n) (z : Fin n → ℝ) (s : ℝ) :
+    mext φ (Function.update z i s) - mext φ z = (s - z i) * dmext φ i z := by
+  have h1 := mext_update φ i z s
+  have h2 := mext_update φ i z (z i)
+  simp only [Function.update_eq_self] at h2
+  rw [h1, h2]; ring
+
 /-- Flipping `y_i` negates `m^{[i]}` and leaves other coordinates unchanged:
 `m_t(x, σ_i y, ζ) = update (m_t(x,y,ζ)) i (-(m^{[i]}))`. -/
 lemma mB_flip_y (t : ℝ) (x y ζ : Cube n) (i : Fin n) :
     D.mB t x (flipCoord i y) ζ
       = Function.update (D.mB t x y ζ) i (-(D.mB t x y ζ i)) := by
-  sorry
+  funext j
+  by_cases h : j = i
+  · subst h; simp only [mB, flipCoord_self, toR_neg, Function.update_self]; ring
+  · simp only [mB, flipCoord_ne h, Function.update_of_ne h]
+
+/-- Flipping `x_i` negates the `b_t`-part of `m^{[i]}` only. -/
+lemma mB_flip_x (t : ℝ) (x y ζ : Cube n) (i : Fin n) :
+    D.mB t (flipCoord i x) y ζ
+      = Function.update (D.mB t x y ζ) i
+          (D.aB t * toR (y i) - D.bB t * toR (x i) * toR (y i) * toR (ζ i)) := by
+  funext j
+  by_cases h : j = i
+  · subst h; simp only [mB, flipCoord_self, toR_neg, Function.update_self]; ring
+  · simp only [mB, flipCoord_ne h, Function.update_of_ne h]
 
 /-- Flipping both `x_i, y_i` shifts `m^{[i]}` by `-2a_t y_i`. -/
 lemma mB_flip_xy (t : ℝ) (x y ζ : Cube n) (i : Fin n) :
     D.mB t (flipCoord i x) (flipCoord i y) ζ
       = Function.update (D.mB t x y ζ) i
           (D.mB t x y ζ i - 2 * D.aB t * toR (y i)) := by
-  sorry
+  funext j
+  by_cases h : j = i
+  · subst h; simp only [mB, flipCoord_self, toR_neg, Function.update_self]; ring
+  · simp only [mB, flipCoord_ne h, Function.update_of_ne h]
 
 /-- Bridge difference in `y` [LGF eq (4.6)]:
 `Δ_i^y q_t^ζ(x,y) = -2(a_t y_i + b_t x_i y_i ζ_i)·∂_iφ(m_t)`. -/
 lemma qB_flip_y_sub (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) (i : Fin n) :
     D.qB φ t ζ x (flipCoord i y) - D.qB φ t ζ x y
       = -2 * D.mB t x y ζ i * dmext φ i (D.mB t x y ζ) := by
-  sorry
+  simp only [qB]
+  rw [mB_flip_y, mext_update_neg]
+  ring
 
 /-- Bridge difference in `y` after flipping `x_i` [LGF eq (4.7)]:
 `Δ_i^y q_t^ζ(σ_i x, y) = -2(a_t y_i - b_t x_i y_i ζ_i)·∂_iφ(m_t)`. -/
@@ -129,14 +156,19 @@ lemma qB_flip_y_flip_x_sub (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n)
       = -2 * (D.aB t * toR (y i)
           - D.bB t * toR (x i) * toR (y i) * toR (ζ i))
         * dmext φ i (D.mB t x y ζ) := by
-  sorry
+  simp only [qB]
+  rw [mB_flip_y, mext_update_neg, D.mB_flip_x t x y ζ i, Function.update_self,
+    dmext_update]
+  ring
 
 /-- Synchronized bridge difference:
 `Δ_i^{xy} q_t^ζ = -2a_t y_i·∂_iφ(m_t)` [LGF §5.2]. -/
 lemma qB_flip_xy_sub (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) (i : Fin n) :
     D.qB φ t ζ (flipCoord i x) (flipCoord i y) - D.qB φ t ζ x y
       = -2 * D.aB t * toR (y i) * dmext φ i (D.mB t x y ζ) := by
-  sorry
+  simp only [qB]
+  rw [mB_flip_xy, mext_update_sub]
+  ring
 
 /-- Coefficient ODE: `d/dt m_t^{[i]} = λ_{t,i}^ζ(x)·a_t·y_i` (equivalently
 the pair of scalar ODEs for `a_t ± b_t`) [LGF §5.2, harmonicity of the
