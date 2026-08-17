@@ -1,3 +1,23 @@
+# SESSION RULES (read first)
+
+THERE IS NO WAKEUP AND NO NOTIFICATION — this is a single non-interactive
+`claude -p` run. If you stop issuing tool calls the session ENDS IMMEDIATELY
+and every uncommitted line is swept into an unverified auto-commit. A previous
+attempt at a task like this was lost exactly that way (its last line was
+"I'll wait for the background waiter to notify me — standing by."). NEVER
+say you are waiting for anything; there is nothing that can wake you.
+
+- Run every `lake build` in the FOREGROUND and read its output directly.
+  NEVER background a build (`&`), never poll with `until pgrep ...` loops,
+  never `sleep` while "waiting" for a build.
+- Builds are fast here (shared Mathlib cache): `lake build <YourModule>`
+  rebuilds only your files and their few project deps.
+- COMMIT AFTER EACH LEMMA COMPILES (git add the touched files + commit with
+  a one-line message). Do not batch all work into one final commit.
+- Before ending: run the gate build one final time in the foreground, ensure
+  it is green, commit everything, and print a 5-line summary. Then stop.
+- Keep each response bounded (~150 lines); long tool outputs are fine.
+
 # Task: close every `sorry` in Profile.lean  ([C Lemma 4])
 
 Touch-set: TalagrandConvConjecture/Profile.lean only. Do not change
