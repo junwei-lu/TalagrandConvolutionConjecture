@@ -64,12 +64,188 @@ structure AdmissibleGrid (ℓ θ : ℝ) (K : ℕ) (z : ℕ → ℝ) : Prop where
   nocross : ∀ k, k < K → ∀ t ∈ Set.Ioo (z k) (z (k + 1)), ∀ x : Cube n,
     D.F t x ≠ ℓ + 1
 
+/-- Off-diagonal, monotone chaining of grid nodes. -/
+private lemma grid_mono_le {ℓ θ : ℝ} {K : ℕ} {z : ℕ → ℝ}
+    (hg : D.AdmissibleGrid ℓ θ K z) : ∀ {i j : ℕ}, i ≤ j → j ≤ K → z i ≤ z j := by
+  intro i j hij hj
+  induction j with
+  | zero => rw [Nat.le_zero.mp hij]
+  | succ m ih =>
+      rcases Nat.eq_or_lt_of_le hij with h | h
+      · rw [h]
+      · have him : i ≤ m := Nat.lt_succ_iff.mp h
+        exact le_trans (ih him (le_trans (Nat.le_succ m) hj))
+          (hg.mono m (Nat.lt_of_succ_le hj))
+
+private lemma grid_le_obsT {ℓ θ : ℝ} {K : ℕ} {z : ℕ → ℝ}
+    (hg : D.AdmissibleGrid ℓ θ K z) {k : ℕ} (hk : k ≤ K) : z k ≤ obsT := by
+  rw [← hg.last]; exact D.grid_mono_le hg hk le_rfl
+
+private lemma grid_theta_le {ℓ θ : ℝ} {K : ℕ} {z : ℕ → ℝ}
+    (hg : D.AdmissibleGrid ℓ θ K z) {k : ℕ} (hk : k ≤ K) : θ ≤ z k := by
+  rw [← hg.first]; exact D.grid_mono_le hg (Nat.zero_le k) hk
+
+/-- The heat flow is a polynomial of degree `≤ n` in the correlation `ρ`. -/
+private lemma exists_heatPoly (f : Cube n → ℝ) (x : Cube n) :
+    ∃ p : Polynomial ℝ, p.natDegree ≤ n ∧ ∀ ρ : ℝ, p.eval ρ = smooth ρ f x := by
+  classical
+  refine ⟨∑ y : Cube n, Polynomial.C (f y) *
+      ∏ i : Fin n, (Polynomial.C (toR (x i) * toR (y i) / 2) * Polynomial.X
+        + Polynomial.C (1 / 2)), ?_, ?_⟩
+  · refine Polynomial.natDegree_sum_le_of_forall_le _ _ fun y _ => ?_
+    refine le_trans Polynomial.natDegree_mul_le ?_
+    rw [Polynomial.natDegree_C, zero_add]
+    refine le_trans (Polynomial.natDegree_prod_le _ _) ?_
+    refine le_trans (Finset.sum_le_sum fun i (_ : i ∈ Finset.univ) =>
+      Polynomial.natDegree_linear_le) ?_
+    simp
+  · intro ρ
+    rw [Polynomial.eval_finset_sum, smooth_eq_kernel_sum]
+    refine Finset.sum_congr rfl fun y _ => ?_
+    rw [Polynomial.eval_mul, Polynomial.eval_C, Polynomial.eval_prod, mul_comm]
+    congr 1
+    refine Finset.prod_congr rfl fun i _ => ?_
+    simp only [Polynomial.eval_add, Polynomial.eval_mul, Polynomial.eval_C,
+      Polynomial.eval_X]
+    ring
+
+private lemma smooth_zero_eq_unifE (f : Cube n → ℝ) (x : Cube n) :
+    smooth 0 f x = unifE f := by
+  rw [smooth_eq_kernel_sum, unifE, Finset.sum_div]
+  refine Finset.sum_congr rfl fun y _ => ?_
+  have h1 : ∀ j : Fin n, (1 + (0 : ℝ) * toR (x j) * toR (y j)) / 2 = 1 / 2 := by
+    intro j; ring
+  rw [Finset.prod_congr rfl fun j (_ : j ∈ Finset.univ) => h1 j]
+  rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin, div_pow, one_pow]
+  have h2 : ((2 : ℝ)) ^ n ≠ 0 := by positivity
+  field_simp
+
+/-- Intermediate value theorem for the log-density: the level `ℓ+1` between
+`F a x` and `F b x` is attained on `[a,b]`. -/
+private lemma exists_cross {ℓ a b : ℝ} (hab : a ≤ b) (hbT : b ≤ D.T) (x : Cube n)
+    (h : (D.F a x < ℓ + 1 ∧ ℓ + 1 ≤ D.F b x) ∨
+      (D.F b x < ℓ + 1 ∧ ℓ + 1 ≤ D.F a x)) :
+    ∃ c ∈ Set.Icc a b, D.F c x = ℓ + 1 := by
+  have hcont : ContinuousOn (fun t => D.F t x) (Set.Icc a b) :=
+    (D.continuousOn_F x).mono fun t ht => le_trans ht.2 hbT
+  rcases h with ⟨h1, h2⟩ | ⟨h1, h2⟩
+  · obtain ⟨c, hc, hc2⟩ := intermediate_value_Icc hab hcont ⟨h1.le, h2⟩
+    exact ⟨c, hc, hc2⟩
+  · obtain ⟨c, hc, hc2⟩ := intermediate_value_Icc' hab hcont ⟨h1.le, h2⟩
+    exact ⟨c, hc, hc2⟩
+
 /-- Existence of an admissible grid: barrier crossings are roots of a nonzero
 polynomial in `e^{-(T-t)}` (constant coefficient `1 ≠ e^{ℓ+1}`), hence
 finitely many; sort them. -/
 theorem exists_admissibleGrid (ℓ : ℝ) (hℓ : 0 < ℓ) {θ : ℝ} (hθ : θ ≤ obsT) :
     ∃ K z, D.AdmissibleGrid ℓ θ K z := by
-  sorry
+  classical
+  rcases eq_or_lt_of_le hθ with hθeq | hθlt
+  · -- degenerate case `θ = T_o`: a single (empty) cell
+    refine ⟨1, fun k => if k = 0 then θ else obsT, Nat.one_pos, by simp, by simp,
+      ?_, ?_⟩
+    · intro k hk
+      obtain rfl : k = 0 := Nat.lt_one_iff.mp hk
+      simpa using hθ
+    · intro k hk t ht x _
+      obtain rfl : k = 0 := Nat.lt_one_iff.mp hk
+      simp only [Set.mem_Ioo, zero_add, if_pos, one_ne_zero, if_false] at ht
+      rw [← hθeq] at ht
+      exact absurd (lt_trans ht.1 ht.2) (lt_irrefl θ)
+  -- main case: finitely many crossing times, taken as nodes
+  choose p hpdeg hpev using fun x : Cube n => exists_heatPoly D.f x
+  have hfsPoly : ∀ (u : ℝ) (x : Cube n), D.fs u x
+      = ∑ k ∈ Finset.range (n + 1), (p x).coeff k * Real.exp (-u) ^ k := by
+    intro u x
+    rw [Dat.fs, heatAt, ← hpev x (Real.exp (-u)),
+      Polynomial.eval_eq_sum_range' (Nat.lt_succ_of_le (hpdeg x))]
+  have hcoeff0 : ∀ x : Cube n, (p x).coeff 0 = 1 := by
+    intro x
+    rw [Polynomial.coeff_zero_eq_eval_zero, hpev x 0, smooth_zero_eq_unifE, D.hm]
+  have hexp : (1 : ℝ) < Real.exp (ℓ + 1) := by
+    have := Real.add_one_le_exp (ℓ + 1); linarith
+  have hfin0 : {u : ℝ | ∃ x : Cube n, D.fs u x = Real.exp (ℓ + 1)}.Finite := by
+    have hne : ∀ x : Cube n, Real.exp (ℓ + 1) ≠ (p x).coeff 0 := by
+      intro x; rw [hcoeff0 x]; exact ne_of_gt hexp
+    have hFin := finite_setOf_expPoly_family_eq (N := n + 1)
+      (fun (x : Cube n) k => (p x).coeff k) (fun _ => Real.exp (ℓ + 1)) hne
+    refine hFin.subset ?_
+    intro u hu
+    obtain ⟨x, hx⟩ := hu
+    exact ⟨x, by rw [← hfsPoly u x]; exact hx⟩
+  have hZfin : ((fun t => D.T - t) ⁻¹'
+      {u : ℝ | ∃ x : Cube n, D.fs u x = Real.exp (ℓ + 1)} ∩ Set.Icc θ obsT).Finite :=
+    Set.Finite.inter_of_left
+      (Set.Finite.preimage (Set.injOn_of_injective fun a b hab => by
+        simpa using neg_injective (by linarith [hab] : -a = -b)) hfin0) _
+  set S : Finset ℝ := insert θ (insert obsT hZfin.toFinset) with hSdef
+  have hθS : θ ∈ S := Finset.mem_insert_self _ _
+  have hobsS : obsT ∈ S := Finset.mem_insert_of_mem (Finset.mem_insert_self _ _)
+  have hmemS : ∀ v ∈ S, θ ≤ v ∧ v ≤ obsT := by
+    intro v hv
+    rcases Finset.mem_insert.mp hv with rfl | hv
+    · exact ⟨le_rfl, hθ⟩
+    rcases Finset.mem_insert.mp hv with rfl | hv
+    · exact ⟨hθ, le_rfl⟩
+    · exact ⟨(hZfin.mem_toFinset.mp hv).2.1, (hZfin.mem_toFinset.mp hv).2.2⟩
+  have hcard : 2 ≤ S.card :=
+    Finset.one_lt_card.mpr ⟨θ, hθS, obsT, hobsS, ne_of_lt hθlt⟩
+  have hcard0 : 0 < S.card := by omega
+  set e := S.orderIsoOfFin (rfl : S.card = S.card) with hedef
+  have hmem_e : ∀ j : Fin S.card, (e j).1 ∈ S := fun j => (e j).2
+  have hmono_e : ∀ i j : Fin S.card, i ≤ j → (e i).1 ≤ (e j).1 := fun i j hij =>
+    Subtype.coe_le_coe.mpr (e.monotone hij)
+  have hlt_e : ∀ i j : Fin S.card, (e i).1 < (e j).1 → i < j := fun i j h =>
+    e.lt_iff_lt.mp (Subtype.coe_lt_coe.mp h)
+  have hsurj : ∀ v ∈ S, ∃ j : Fin S.card, (e j).1 = v := by
+    intro v hv
+    exact ⟨e.symm ⟨v, hv⟩, by rw [OrderIso.apply_symm_apply]⟩
+  refine ⟨S.card - 1,
+    fun k => if h : k < S.card then (e ⟨k, h⟩).1 else obsT, ?_⟩
+  have hzv : ∀ (k : ℕ) (h : k < S.card),
+      (if h' : k < S.card then (e ⟨k, h'⟩).1 else obsT) = (e ⟨k, h⟩).1 :=
+    fun k h => dif_pos h
+  refine ⟨by omega, ?_, ?_, ?_, ?_⟩
+  · -- `z 0 = θ`
+    rw [hzv 0 hcard0]
+    obtain ⟨j, hj⟩ := hsurj θ hθS
+    refine le_antisymm ?_ (hmemS _ (hmem_e _)).1
+    rw [← hj]; exact hmono_e _ _ (Fin.le_def.mpr (Nat.zero_le _))
+  · -- `z K = T_o`
+    have hlt : S.card - 1 < S.card := by omega
+    rw [hzv _ hlt]
+    obtain ⟨j, hj⟩ := hsurj obsT hobsS
+    refine le_antisymm (hmemS _ (hmem_e _)).2 ?_
+    rw [← hj]
+    exact hmono_e _ _ (Fin.le_def.mpr
+      (show (j : ℕ) ≤ S.card - 1 from by have := j.isLt; omega))
+  · -- monotone
+    intro k hk
+    rw [hzv k (by omega), hzv (k + 1) (by omega)]
+    exact hmono_e _ _ (Fin.mk_le_mk.mpr (by omega))
+  · -- no crossing inside an open cell
+    intro k hk t ht x hx
+    have h1 : k < S.card := by omega
+    have h2 : k + 1 < S.card := by omega
+    rw [hzv k h1, hzv (k + 1) h2] at ht
+    have hθt : θ ≤ t := le_trans (hmemS _ (hmem_e ⟨k, h1⟩)).1 ht.1.le
+    have htobs : t ≤ obsT := le_trans ht.2.le (hmemS _ (hmem_e ⟨k + 1, h2⟩)).2
+    have hTt : 0 ≤ D.T - t := by
+      have := D.obsT_lt_T; linarith
+    have hpos : 0 < D.fs (D.T - t) x := D.fs_pos hTt x
+    have hfsx : D.fs (D.T - t) x = Real.exp (ℓ + 1) := by
+      simp only [Dat.F] at hx
+      rw [← hx, Real.exp_log hpos]
+    have htS : t ∈ S :=
+      Finset.mem_insert_of_mem (Finset.mem_insert_of_mem
+        (hZfin.mem_toFinset.mpr ⟨⟨x, hfsx⟩, ⟨hθt, htobs⟩⟩))
+    obtain ⟨j, hj⟩ := hsurj t htS
+    have hkj : (⟨k, h1⟩ : Fin S.card) < j := hlt_e _ _ (by rw [hj]; exact ht.1)
+    have hkj' : k < (j : ℕ) := hkj
+    have : (e ⟨k + 1, h2⟩).1 ≤ t := by
+      rw [← hj]
+      exact hmono_e _ _ (Fin.le_def.mpr (show k + 1 ≤ (j : ℕ) from by omega))
+    exact absurd ht.2 (not_lt.mpr this)
 
 /-- Barrier membership is constant on open cells of an admissible grid
 (intermediate value theorem plus `nocross`). -/
@@ -78,7 +254,25 @@ theorem barrier_const_on_cell {ℓ θ : ℝ} {K : ℕ} {z : ℕ → ℝ}
     {t t' : ℝ} (ht : t ∈ Set.Ioo (z k) (z (k + 1)))
     (ht' : t' ∈ Set.Ioo (z k) (z (k + 1))) (x : Cube n) :
     x ∈ D.barrier ℓ t ↔ x ∈ D.barrier ℓ t' := by
-  sorry
+  have hbT : ∀ u ∈ Set.Ioo (z k) (z (k + 1)), u ≤ D.T := by
+    intro u hu
+    have h1 : u < z (k + 1) := hu.2
+    have h2 : z (k + 1) ≤ obsT := D.grid_le_obsT hg (Nat.succ_le_of_lt hk)
+    have := D.obsT_lt_T
+    linarith
+  have key : ∀ u ∈ Set.Ioo (z k) (z (k + 1)), ∀ u' ∈ Set.Ioo (z k) (z (k + 1)),
+      ℓ + 1 ≤ D.F u x → ℓ + 1 ≤ D.F u' x := by
+    intro u hu u' hu' hb
+    by_contra hb'
+    rw [not_le] at hb'
+    rcases le_total u' u with hle | hle
+    · obtain ⟨c, hc, hc2⟩ := D.exists_cross hle (hbT u hu) x (Or.inl ⟨hb', hb⟩)
+      exact hg.nocross k hk c
+        ⟨lt_of_lt_of_le hu'.1 hc.1, lt_of_le_of_lt hc.2 hu.2⟩ x hc2
+    · obtain ⟨c, hc, hc2⟩ := D.exists_cross hle (hbT u' hu') x (Or.inr ⟨hb', hb⟩)
+      exact hg.nocross k hk c
+        ⟨lt_of_lt_of_le hu.1 hc.1, lt_of_le_of_lt hc.2 hu'.2⟩ x hc2
+  exact ⟨fun h => key t ht t' ht' h, fun h => key t' ht' t ht h⟩
 
 open Classical in
 /-- Alive/dead out-rate table at time `t`, with frozen exponent `d` and
@@ -144,27 +338,6 @@ private lemma continuousOn_if_const {α : Type*} [TopologicalSpace α] {s : Set 
   by_cases h : P
   · simpa only [if_pos h] using hf
   · simpa only [if_neg h] using hg
-
-/-- Off-diagonal, monotone chaining of grid nodes. -/
-private lemma grid_mono_le {ℓ θ : ℝ} {K : ℕ} {z : ℕ → ℝ}
-    (hg : D.AdmissibleGrid ℓ θ K z) : ∀ {i j : ℕ}, i ≤ j → j ≤ K → z i ≤ z j := by
-  intro i j hij hj
-  induction j with
-  | zero => rw [Nat.le_zero.mp hij]
-  | succ m ih =>
-      rcases Nat.eq_or_lt_of_le hij with h | h
-      · rw [h]
-      · have him : i ≤ m := Nat.lt_succ_iff.mp h
-        exact le_trans (ih him (le_trans (Nat.le_succ m) hj))
-          (hg.mono m (Nat.lt_of_succ_le hj))
-
-private lemma grid_le_obsT {ℓ θ : ℝ} {K : ℕ} {z : ℕ → ℝ}
-    (hg : D.AdmissibleGrid ℓ θ K z) {k : ℕ} (hk : k ≤ K) : z k ≤ obsT := by
-  rw [← hg.last]; exact D.grid_mono_le hg hk le_rfl
-
-private lemma grid_theta_le {ℓ θ : ℝ} {K : ℕ} {z : ℕ → ℝ}
-    (hg : D.AdmissibleGrid ℓ θ K z) {k : ℕ} (hk : k ≤ K) : θ ≤ z k := by
-  rw [← hg.first]; exact D.grid_mono_le hg (Nat.zero_le k) hk
 
 open Classical in
 /-- `min`/`max` reformulation of `jrate`, manifestly continuous in `t`
@@ -330,7 +503,6 @@ private lemma killTr_col_sum (ℓ t : ℝ) (s' : JSt n) :
     intro s
     obtain ⟨x, y, b⟩ := s
     simp only [killTr, Prod.mk.injEq]
-    all_goals (refine if_congr ?_ rfl rfl; tauto)
   rw [Finset.sum_congr rfl fun s _ => key s]
   simp
 
