@@ -1,23 +1,20 @@
 # TalagrandConvConjecture — status
 
-Updated: 2026-08-17 (session 1, evening)
+Updated: 2026-08-17 — **CAMPAIGN COMPLETE**
 
-## Headline
-`Talagrand.talagrand_convolution_conjecture` — statement audited, proof
-assembled in `Main.lean`. **Library state: full build GREEN with exactly ONE
-open theorem: `fixed_band` ([LGF Prop 3.2]).** Everything else proved and
-gate-verified, including:
-- `DA_le` (Lemma 3.3) — laptop-proved (Duhamel + 3-level CS + q²-chain, C=8);
-- `weighted_comparison` (Prop 4.1), `band_contraction` (Lemma 3.4),
-  `scoreEnergy_le` (Lemma 3.5) — lane-proved;
-- Chen Lemma 4 (Profile), Lemma 5, Lemma 7; hypercube LSI (const 4);
-  all flow/bridge/coupling machinery.
-Statement repairs (falsity witnesses documented in-file): unguarded
-`F_flipCoord_sub`, `hasDerivAt_mB` chain (t = T degeneracy), Profile's
-unguarded `0 ≤ s` family, `finite_setOf_expPoly_family_eq` at `N = 0`.
-Two `fixed_band` lanes in flight (Steps 1–3 banked, master assembly left).
-Final audit staged: `AxiomsCheck.lean` (run `lake env lean AxiomsCheck.lean`
-on cluster after the last merge).
+## Headline — DONE
+
+**`Talagrand.talagrand_convolution_conjecture` is fully proved.**
+- Full-library gate: `lake build` exit 0, **zero sorries** (main = 81348d4).
+- Axioms audit (`AxiomsCheck.lean`): all 8 audited theorems (both headline
+  forms, `fixed_band`, `DA_le`, `weighted_comparison`, `scoreEnergy_le`,
+  `band_contraction`, `profile_time_integral_le`) depend only on
+  `[propext, Classical.choice, Quot.sound]` — no `sorryAx`.
+Provenance: DA_le laptop-proved; fixed_band, weighted_comparison,
+scoreEnergy_le lane-proved; band_contraction lane+laptop repairs; all other
+modules from the round-1 sixteen-lane fan-out. Statement repairs (falsity
+witnesses in-file): unguarded F_flipCoord_sub, hasDerivAt_mB chain,
+Profile 0 ≤ s family, expPoly family lemma at N = 0.
 
 ## Work packages / fan-out ledger
 
