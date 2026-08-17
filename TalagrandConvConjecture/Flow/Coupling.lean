@@ -521,6 +521,143 @@ private lemma initVec_sum (x₀ : Cube n) : ∑ s, initVec (n := n) x₀ s = 1 :
   simp only [initVec]
   simp
 
+/-! ### Pairing identities (generator duality) -/
+
+/-- One-target jump sums: `P1` has a unique target, `P2` contributes nothing to
+the test (its target has the same `V`-coordinate), `P3` has a unique target
+under the side condition `Q3`. -/
+private lemma sum_three_jumps (P1 P2 P3 : JSt n → Prop)
+    [DecidablePred P1] [DecidablePred P2] [DecidablePred P3]
+    (Q3 : Prop) [Decidable Q3] (s1 s3 : JSt n) (r1 r2 r3 : ℝ) (f : JSt n → ℝ)
+    (h1 : ∀ s, P1 s ↔ s = s1) (h2 : ∀ s, P2 s → f s = 0)
+    (h3 : ∀ s, P3 s ↔ (Q3 ∧ s = s3)) :
+    ∑ s : JSt n, ((if P1 s then r1 else 0) + (if P2 s then r2 else 0)
+        + (if P3 s then r3 else 0)) * f s
+      = r1 * f s1 + (if Q3 then r3 * f s3 else 0) := by
+  classical
+  have key : ∀ s : JSt n, ((if P1 s then r1 else 0) + (if P2 s then r2 else 0)
+      + (if P3 s then r3 else 0)) * f s
+      = (if s = s1 then r1 * f s1 else 0)
+        + (if Q3 ∧ s = s3 then r3 * f s3 else 0) := by
+    intro s
+    have e2 : (if P2 s then r2 else 0) * f s = 0 := by
+      by_cases hp : P2 s
+      · rw [h2 s hp, mul_zero]
+      · rw [if_neg hp, zero_mul]
+    have e1 : (if P1 s then r1 else 0) * f s = if s = s1 then r1 * f s1 else 0 := by
+      by_cases hp : P1 s
+      · have hs := (h1 s).mp hp
+        rw [if_pos hp, if_pos hs, hs]
+      · rw [if_neg hp, if_neg (fun hEq => hp ((h1 s).mpr hEq)), zero_mul]
+    have e3 : (if P3 s then r3 else 0) * f s
+        = if Q3 ∧ s = s3 then r3 * f s3 else 0 := by
+      by_cases hp : P3 s
+      · have hs := (h3 s).mp hp
+        rw [if_pos hp, if_pos hs, hs.2]
+      · rw [if_neg hp, if_neg (fun hEq => hp ((h3 s).mpr hEq)), zero_mul]
+    rw [add_mul, add_mul, e1, e2, e3, add_zero]
+  rw [Finset.sum_congr rfl fun s _ => key s, Finset.sum_add_distrib]
+  congr 1
+  · simp
+  · by_cases hq : Q3
+    · simp only [hq, true_and, if_true]
+      simp
+    · simp only [hq, false_and, if_false, Finset.sum_const_zero]
+
+/-- **Generator duality** for the forward matrix of an out-rate table. -/
+private lemma fwdOf_pairing_generic (q : JSt n → JSt n → ℝ) (v w : JSt n → ℝ) :
+    ∑ s, matVec (fwdOf q) v s * w s
+      = ∑ s, v s * (∑ s', q s s' * (w s' - w s)) := by
+  have hL : ∀ s : JSt n, matVec (fwdOf q) v s * w s
+      = (∑ s' : JSt n, q s' s * v s' * w s)
+        - (∑ s'' : JSt n, q s s'') * v s * w s := by
+    intro s
+    simp only [matVec, fwdOf, Finset.sum_mul, sub_mul, ite_mul, zero_mul]
+    rw [Finset.sum_sub_distrib]
+    congr 1
+    rw [Finset.sum_ite_eq]
+    simp
+  have e1 : ∑ s : JSt n, ∑ s' : JSt n, q s' s * v s' * w s
+      = ∑ s : JSt n, ∑ s' : JSt n, q s s' * v s * w s' :=
+    Finset.sum_comm (s := Finset.univ) (t := Finset.univ)
+      (f := fun (a b : JSt n) => q b a * v b * w a)
+  have e2 : ∑ s : JSt n, (∑ s'' : JSt n, q s s'') * v s * w s
+      = ∑ s : JSt n, ∑ s' : JSt n, q s s' * v s * w s := by
+    refine Finset.sum_congr rfl fun s _ => ?_
+    rw [Finset.sum_mul, Finset.sum_mul]
+  rw [Finset.sum_congr rfl fun s _ => hL s, Finset.sum_sub_distrib, e1, e2,
+    ← Finset.sum_sub_distrib]
+  refine Finset.sum_congr rfl fun s _ => ?_
+  rw [Finset.mul_sum, ← Finset.sum_sub_distrib]
+  exact Finset.sum_congr rfl fun s' _ => by ring
+
+/-- The out-jumps of the coupling move the `V`-coordinate with total rate
+`Y_i/2` (the sector split and the `W`-only jumps are invisible to a
+`y`-blind, sector-blind test), so the `V`-marginal generator is `revGen`. -/
+private lemma jrate_pairing_state {d : ℝ} (B : Set (Cube n)) (t : ℝ) (s : JSt n)
+    (h : Cube n → ℝ) :
+    ∑ s' : JSt n, D.jrate d B t s s' * (h s'.1 - h s.1) = D.revGen t h s.1 := by
+  classical
+  obtain ⟨x, y, b⟩ := s
+  simp only [jrate, revGen]
+  rw [Finset.sum_congr rfl fun s' _ => Finset.sum_mul _ _ _, Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  refine Eq.trans (sum_three_jumps _ _ _ (b = true ∧ ¬(D.Y t i x < 1))
+    ((flipCoord i x, flipCoord i y, (b && decide (flipCoord i x ∉ B))) : JSt n)
+    ((flipCoord i x, y, decide (flipCoord i x ∉ B)) : JSt n) _ _ _ _ ?_ ?_ ?_) ?_
+  · intro s'
+    constructor
+    · refine fun hc => Prod.ext_iff.mpr ⟨hc.1, Prod.ext_iff.mpr ⟨hc.2.1, ?_⟩⟩
+      rw [hc.2.2, hc.1]
+    · intro hEq
+      subst hEq
+      exact ⟨rfl, rfl, rfl⟩
+  · intro s' hs'
+    rw [hs'.2.2.1, sub_self]
+  · intro s'
+    constructor
+    · refine fun hc => ⟨⟨hc.1, hc.2.2.2.1⟩,
+        Prod.ext_iff.mpr ⟨hc.2.2.1, Prod.ext_iff.mpr ⟨hc.2.1, ?_⟩⟩⟩
+      rw [hc.2.2.2.2, hc.2.2.1]
+    · intro hc
+      obtain ⟨⟨hb, hY⟩, hEq⟩ := hc
+      subst hEq
+      exact ⟨hb, rfl, rfl, hY, rfl⟩
+  · rcases Bool.eq_false_or_eq_true b with hb | hb <;>
+      by_cases hY1 : D.Y t i x < 1 <;> simp [hb, hY1] <;> ring
+
+open Classical in
+/-- The unique source of a node transfer: `killTr` is a `{0,1}` matrix with one
+nonzero entry per column. -/
+private lemma killTr_eq_single (ℓ t : ℝ) (s s' : JSt n) :
+    D.killTr ℓ t s s'
+      = if s = (s'.1, s'.2.1, (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ t))) then 1
+        else 0 := by
+  classical
+  obtain ⟨x, y, b⟩ := s
+  obtain ⟨x', y', b'⟩ := s'
+  simp only [killTr, Prod.mk.injEq]
+
+/-- The node transfers preserve the pairing with a sector-blind, `y`-blind
+test (they only move mass between sectors at fixed positions). -/
+private lemma killTr_pairing (ℓ t : ℝ) (v : JSt n → ℝ) (h : Cube n → ℝ) :
+    ∑ s : JSt n, matVec (D.killTr ℓ t) v s * h s.1 = ∑ s : JSt n, v s * h s.1 := by
+  classical
+  simp only [matVec, Finset.sum_mul]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun s' _ => ?_
+  have key : ∀ s : JSt n, D.killTr ℓ t s s' * v s' * h s.1
+      = if s = (s'.1, s'.2.1, (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ t))) then
+          v s' * h s'.1 else 0 := by
+    intro s
+    rw [D.killTr_eq_single ℓ t s s']
+    by_cases hs : s = ((s'.1, s'.2.1, (s'.2.2 && decide (s'.1 ∉ D.barrier ℓ t))) : JSt n)
+    · rw [if_pos hs, if_pos hs, hs]
+      simp
+    · rw [if_neg hs, if_neg hs, zero_mul, zero_mul]
+  rw [Finset.sum_congr rfl fun s _ => key s]
+  simp
+
 /-! ### The alive sector avoids the barrier -/
 
 /-- The cell barrier (sampled at the midpoint) is contained in the barrier at
