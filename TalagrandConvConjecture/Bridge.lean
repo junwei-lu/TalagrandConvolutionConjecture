@@ -234,6 +234,12 @@ lemma hasDerivAt_mB_of_ne {t : ℝ} (hne : 1 - D.a ^ 2 * gam t ^ 2 ≠ 0)
       (by rw [hx, hz]; ring)]
     simp only [aB, hx, hz]; field_simp; ring
 
+/-- The bridge coefficients degenerate exactly at `t = T`: `aγ_T = 1`, i.e.
+`1 - a²γ_T² = 0` (so `a_T`, `b_T` are junk `x/0 = 0` there). -/
+lemma a_mul_gam_T : D.a * gam D.T = 1 := by
+  have h := D.exp_neg_T_sub D.T
+  simpa using h.symm
+
 -- STATEMENT-ISSUE: this hypothesis-free form is FALSE at the single time
 -- `t = D.T` (where `γ_T = 1/a`, so `1 - a²γ_T² = 0`). There both `a_t` and
 -- `b_t` are junk (`x/0 = 0`) while their limits are infinite/nonzero, so
