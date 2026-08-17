@@ -147,8 +147,10 @@ private noncomputable def hiFin (r : ℝ) : Finset (Cube n) :=
 private lemma ind_bandFin (r : ℝ) (w : Cube n) :
     (if w ∈ D.bandFin r then (1 : ℝ) else 0) = D.bandW r w := by
   by_cases h : D.F obsT w ∈ Set.Ioc r (r + 1)
-  · simp [bandFin, bandW, h]
-  · simp [bandFin, bandW, h]
+  · obtain ⟨h1, h2⟩ := h
+    simp [bandFin, bandW, Set.mem_Ioc, h1, h2]
+  · rw [Set.mem_Ioc] at h
+    simp [bandFin, bandW, Set.mem_Ioc, h]
 
 private lemma ind_hiFin (r : ℝ) (w : Cube n) :
     (if w ∈ D.hiFin r then (1 : ℝ) else 0)
