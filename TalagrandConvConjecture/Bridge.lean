@@ -170,6 +170,73 @@ lemma qB_flip_xy_sub (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) (i : Fin 
   rw [mB_flip_xy, mext_update_sub]
   ring
 
+/-- `γ_t` solves `γ̇ = γ`. -/
+lemma hasDerivAt_gam (t : ℝ) : HasDerivAt (fun s => gam s) (gam t) t := by
+  have h : HasDerivAt (fun s : ℝ => -(obsT - s)) 1 t := by
+    simpa using hasDerivAt_id t
+  simpa [gam] using h.exp
+
+/-- `ρ_t = e^{-(T-t)} = a·γ_t` (uses `e^{-t_a} = a`). -/
+lemma exp_neg_T_sub (t : ℝ) : Real.exp (-(D.T - t)) = D.a * gam t := by
+  have h : -(D.T - t) = Real.log D.a + -(obsT - t) := by
+    simp only [T, tA]; ring
+  rw [h, Real.exp_add, Real.exp_log D.ha0, gam]
+
+/-- Coefficient ODE on the nondegenerate range `1 - a²γ_t² ≠ 0`
+(automatic for `t ≤ T_o` by `den_pos`, and in fact for every `t ≠ T`):
+`d/dt m_t^{[i]} = λ_{t,i}^ζ(x)·a_t·y_i` [LGF §5.2]. -/
+lemma hasDerivAt_mB_of_ne {t : ℝ} (hne : 1 - D.a ^ 2 * gam t ^ 2 ≠ 0)
+    (x y ζ : Cube n) (i : Fin n) :
+    HasDerivAt (fun t => D.mB t x y ζ i)
+      (D.lam t i x ζ * D.aB t * toR (y i)) t := by
+  have hfac : (1 - D.a * gam t) * (1 + D.a * gam t) = 1 - D.a ^ 2 * gam t ^ 2 := by
+    ring
+  have h1 : (1 : ℝ) - D.a * gam t ≠ 0 := by
+    intro h; exact hne (by rw [← hfac, h]; ring)
+  have h2 : (1 : ℝ) + D.a * gam t ≠ 0 := by
+    intro h; exact hne (by rw [← hfac, h]; ring)
+  have h1' : (1 : ℝ) - gam t * D.a ≠ 0 := by rw [mul_comm (gam t) D.a]; exact h1
+  have h2' : (1 : ℝ) + gam t * D.a ≠ 0 := by rw [mul_comm (gam t) D.a]; exact h2
+  have hg : HasDerivAt (fun s => gam s) (gam t) t := hasDerivAt_gam t
+  have hden : HasDerivAt (fun s => 1 - D.a ^ 2 * gam s ^ 2)
+      (-(D.a ^ 2 * ((2 : ℕ) * gam t ^ (2 - 1) * gam t))) t :=
+    ((hg.pow 2).const_mul (D.a ^ 2)).const_sub 1
+  have hA := (hg.mul_const (1 - D.a ^ 2)).div hden hne
+  have hB := (((hg.pow 2).const_sub 1).const_mul D.a).div hden hne
+  have hM := (hA.mul_const (toR (y i))).add
+    (((hB.mul_const (toR (x i))).mul_const (toR (y i))).mul_const (toR (ζ i)))
+  convert hM using 1
+  simp only [Pi.pow_apply]
+  -- `λ_{t,i}^ζ = (1 ∓ aγ)/(1 ± aγ)` according to the sign `ε = x_iζ_i`
+  have hlam : ∀ p q : ℝ, (1 : ℝ) - D.a * gam t * toR (x i) * toR (ζ i) = p →
+      (1 : ℝ) + D.a * gam t * toR (x i) * toR (ζ i) = q →
+      D.lam t i x ζ = p / q := by
+    intro p q hp hq
+    simp only [lam, D.exp_neg_T_sub, hp, hq]
+  rcases toR_eq_one_or (x i) with hx | hx <;> rcases toR_eq_one_or (ζ i) with hz | hz
+  · rw [hlam (1 - D.a * gam t) (1 + D.a * gam t) (by rw [hx, hz]; ring)
+      (by rw [hx, hz]; ring)]
+    simp only [aB, hx, hz]; field_simp; ring
+  · rw [hlam (1 + D.a * gam t) (1 - D.a * gam t) (by rw [hx, hz]; ring)
+      (by rw [hx, hz]; ring)]
+    simp only [aB, hx, hz]; field_simp; ring
+  · rw [hlam (1 + D.a * gam t) (1 - D.a * gam t) (by rw [hx, hz]; ring)
+      (by rw [hx, hz]; ring)]
+    simp only [aB, hx, hz]; field_simp; ring
+  · rw [hlam (1 - D.a * gam t) (1 + D.a * gam t) (by rw [hx, hz]; ring)
+      (by rw [hx, hz]; ring)]
+    simp only [aB, hx, hz]; field_simp; ring
+
+-- STATEMENT-ISSUE: this hypothesis-free form is FALSE at the single time
+-- `t = D.T` (where `γ_T = 1/a`, so `1 - a²γ_T² = 0`). There both `a_t` and
+-- `b_t` are junk (`x/0 = 0`) while their limits are infinite/nonzero, so
+-- `s ↦ m_s^{[i]}` is discontinuous at `T` and no derivative exists, whereas
+-- the stated RHS evaluates to `0`. Falsity witness: `n = 1`, `y i = 1`,
+-- `x i = ζ i = 1`, `t = D.T`: the LHS function tends to
+-- `(a + a⁻¹)/2 ≠ 0 = m_T^{[i]}`. The intended statement carries `t ≤ obsT`
+-- (or `t ≠ D.T`); `hasDerivAt_mB_of_ne` above proves exactly that, and every
+-- downstream use in this file is inside `t ≤ obsT`. Replacing the hypothesis
+-- closes this `sorry` by `exact D.hasDerivAt_mB_of_ne (ne_of_gt (D.den_pos ht)) ..`.
 /-- Coefficient ODE: `d/dt m_t^{[i]} = λ_{t,i}^ζ(x)·a_t·y_i` (equivalently
 the pair of scalar ODEs for `a_t ± b_t`) [LGF §5.2, harmonicity of the
 bridge]. -/
@@ -186,7 +253,15 @@ theorem hasDerivAt_qB (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) :
       (-(∑ i, D.lam t i x ζ *
           (D.qB φ t ζ (flipCoord i x) (flipCoord i y) - D.qB φ t ζ x y) / 2))
       t := by
-  sorry
+  have h := hasDerivAt_mext_comp φ (fun s => D.mB s x y ζ)
+    (fun i => D.lam t i x ζ * D.aB t * toR (y i)) t
+    (fun i => D.hasDerivAt_mB t x y ζ i)
+  convert h using 1
+  have key : ∀ i : Fin n,
+      D.lam t i x ζ * (D.qB φ t ζ (flipCoord i x) (flipCoord i y) - D.qB φ t ζ x y) / 2
+        = -(dmext φ i (D.mB t x y ζ) * (D.lam t i x ζ * D.aB t * toR (y i))) := by
+    intro i; rw [D.qB_flip_xy_sub φ t ζ x y i]; ring
+  simp only [key, Finset.sum_neg_distrib, neg_neg]
 
 /-- **Carré du champ** [LGF eq (4.9)]:
 `(∂_t + 𝓛^{0,ζ})(q_t^ζ)² = 2a_t²∑_i λ_{t,i}^ζ|∂_iφ(m_t)|²`. -/
@@ -197,7 +272,17 @@ theorem hasDerivAt_qB_sq (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) :
               - D.qB φ t ζ x y ^ 2) / 2)
         + 2 * D.aB t ^ 2 * ∑ i, D.lam t i x ζ
             * dmext φ i (D.mB t x y ζ) ^ 2) t := by
-  sorry
+  have h := (D.hasDerivAt_qB φ t ζ x y).pow 2
+  convert h using 1
+  have hqF : ∀ i : Fin n, D.qB φ t ζ (flipCoord i x) (flipCoord i y)
+      = D.qB φ t ζ x y + (-2 * D.aB t * toR (y i) * dmext φ i (D.mB t x y ζ)) := by
+    intro i
+    have := D.qB_flip_xy_sub φ t ζ x y i
+    linarith
+  simp only [hqF, Finset.mul_sum, ← Finset.sum_neg_distrib, ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  linear_combination (-2 * D.aB t ^ 2 * D.lam t i x ζ
+    * dmext φ i (D.mB t x y ζ) ^ 2) * toR_sq (y i)
 
 /-- **Weighted bridge estimate** [LGF eq (4.8)]:
 `λ_{t,i}^ζ(x)·b_t² ≤ a²/(1-a²)·(1 - (m_t^{[i]})²)` for `t ≤ T_o`. -/
