@@ -1,11 +1,23 @@
 # TalagrandConvConjecture — status
 
-Updated: 2026-08-17 (session 1)
+Updated: 2026-08-17 (session 1, evening)
 
 ## Headline
-`Talagrand.talagrand_convolution_conjecture` (Main.lean) — statement written,
-faithfulness-audited against [LGF Thm 1.1]. Full blueprint (22 modules) with
-sorry'd statements compiles modulo the current gate iteration.
+`Talagrand.talagrand_convolution_conjecture` — statement audited, proof
+assembled in `Main.lean`. **Library state: full build GREEN with exactly ONE
+open theorem: `fixed_band` ([LGF Prop 3.2]).** Everything else proved and
+gate-verified, including:
+- `DA_le` (Lemma 3.3) — laptop-proved (Duhamel + 3-level CS + q²-chain, C=8);
+- `weighted_comparison` (Prop 4.1), `band_contraction` (Lemma 3.4),
+  `scoreEnergy_le` (Lemma 3.5) — lane-proved;
+- Chen Lemma 4 (Profile), Lemma 5, Lemma 7; hypercube LSI (const 4);
+  all flow/bridge/coupling machinery.
+Statement repairs (falsity witnesses documented in-file): unguarded
+`F_flipCoord_sub`, `hasDerivAt_mB` chain (t = T degeneracy), Profile's
+unguarded `0 ≤ s` family, `finite_setOf_expPoly_family_eq` at `N = 0`.
+Two `fixed_band` lanes in flight (Steps 1–3 banked, master assembly left).
+Final audit staged: `AxiomsCheck.lean` (run `lake env lean AxiomsCheck.lean`
+on cluster after the last merge).
 
 ## Work packages / fan-out ledger
 
