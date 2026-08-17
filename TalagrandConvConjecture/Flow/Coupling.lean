@@ -167,7 +167,8 @@ theorem exists_admissibleGrid (ℓ : ℝ) (hℓ : 0 < ℓ) {θ : ℝ} (hθ : θ 
   have hfin0 : {u : ℝ | ∃ x : Cube n, D.fs u x = Real.exp (ℓ + 1)}.Finite := by
     have hne : ∀ x : Cube n, Real.exp (ℓ + 1) ≠ (p x).coeff 0 := by
       intro x; rw [hcoeff0 x]; exact ne_of_gt hexp
-    have hFin := finite_setOf_expPoly_family_eq (N := n + 1)
+    have hFin := finite_setOf_expPoly_family_eq_of_pos (N := n + 1)
+      (Nat.succ_pos n)
       (fun (x : Cube n) k => (p x).coeff k) (fun _ => Real.exp (ℓ + 1)) hne
     refine hFin.subset ?_
     intro u hu

@@ -174,8 +174,8 @@ theorem finite_setOf_poly_exp_eq {p : Polynomial ℝ} (hp : p ≠ 0) :
 many crossing times on `ℝ`, assuming the (necessary) hypothesis `0 < N`: if
 each `g j t = ∑_{k<N} c j k · (e^{-t})^k` is a polynomial in `e^{-t}` whose
 value `v j` differs from its limit `c j 0 = g j (+∞)`, then
-`{t | ∃ j, g j t = v j}` is finite. This is the sorry-free form of
-`finite_setOf_expPoly_family_eq` (see the STATEMENT-ISSUE note there). -/
+`{t | ∃ j, g j t = v j}` is finite. The `0 < N` hypothesis is necessary
+(see the repair note below); this is the canonical form. -/
 theorem finite_setOf_expPoly_family_eq_of_pos {J : Type*} [Fintype J] {N : ℕ} (hN : 0 < N)
     (c : J → ℕ → ℝ) (v : J → ℝ) (hv : ∀ j, v j ≠ c j 0) :
     {t : ℝ | ∃ j, ∑ k ∈ Finset.range N, c j k * Real.exp (-t) ^ k = v j}.Finite := by
