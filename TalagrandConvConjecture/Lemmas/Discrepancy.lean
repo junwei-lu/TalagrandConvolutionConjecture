@@ -651,6 +651,7 @@ private lemma fwdOf_transpose_pair' (q : JSt n → JSt n → ℝ) (g : JSt n →
   simp only [fwdOf, sub_mul, Finset.sum_sub_distrib, h2, mul_sub]
   rw [← Finset.sum_mul]
 
+open Classical in
 private lemma jrate_apply' (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
     (x y : Cube n) (b : Bool) (τ : JSt n) :
     D.jrate dd B t (x, y, b) τ
@@ -893,10 +894,12 @@ private lemma continuousOn_pertU (φ : Cube n → ℝ) (ℓ θ : ℝ) (x₀ : Cu
     hYc.rpow_const fun t ht => Or.inl (hYne t ht)
   have hr2 : ContinuousOn (fun t => D.Y t i x ^ (1 - D.dbar ℓ θ x₀))
       (Set.Icc a b) := hYc.rpow_const fun t ht => Or.inl (hYne t ht)
-  exact (((continuousOn_const.sub hr1).max continuousOn_const).div_const 2 |>.mul
+  exact ((ContinuousOn.div_const (ContinuousOn.max
+        (continuousOn_const.sub hr1) continuousOn_const) 2).mul
       ((D.continuousOn_Utest φ hb x (flipCoord i y)).sub
         (D.continuousOn_Utest φ hb x y))).sub
-    (((hYc.sub hr2).max continuousOn_const).div_const 2 |>.mul
+    ((ContinuousOn.div_const (ContinuousOn.max
+        (hYc.sub hr2) continuousOn_const) 2).mul
       ((D.continuousOn_Utest φ hb (flipCoord i x) (flipCoord i y)).sub
         (D.continuousOn_Utest φ hb (flipCoord i x) y)))
 
@@ -964,14 +967,15 @@ private lemma uPair_hasDeriv (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n
               (D.barrier ℓ ((c.z k + c.z (k + 1)) / 2)) t σ τ *
               (D.Utest φ t τ.1 τ.2.1 - D.Utest φ t σ.1 σ.2.1)) := by
       simp only [cellGen]
-      exact D.matVec_fwdOf_pairing _ _ _
+      exact matVec_fwdOf_pairing _ _ _
     rw [hA, ← Finset.sum_add_distrib, pertPair]
     refine Finset.sum_congr rfl fun σ _ => ?_
     obtain ⟨x, y, b⟩ := σ
     cases b with
     | true =>
       rw [D.jrate_U_pair_alive φ x₀ _ t x y]
-      simp only [if_pos rfl]
+      have hcond : (((x, y, true) : JSt n).2.2 = true) := rfl
+      rw [if_pos hcond]
       ring
     | false =>
       rw [D.jrate_U_pair_dead φ _ _ t x y]
@@ -1097,6 +1101,396 @@ private lemma duhamel {ℓ θ : ℝ} (hθ0 : 0 ≤ θ) (hθ : θ ≤ obsT) {x₀
     simp only [DtestF, hφdef, mul_sub, Finset.sum_sub_distrib]
   rw [hD, ← hterm, ← hinit, hchain]
   ring
+
+/-! ### Stage B: the Cauchy–Schwarz cascade
+
+`|∑_{x₀∈A} startW·(test discrepancy)| ≤ √8·√κ·Λ·√(𝒮_A)·√(Y_A)` with
+`Y_A = ∑_A startW·(accumulated Γ-energy)` [LGF eq (4.18)]. -/
+
+/-- Interval Cauchy–Schwarz in square-root form (via the `ε`-regularized
+AM–GM split). -/
+private lemma intervalIntegral_sqrt_mul_le {F G : ℝ → ℝ} {a b : ℝ}
+    (hab : a ≤ b) (hF : ContinuousOn F (Set.Icc a b))
+    (hG : ContinuousOn G (Set.Icc a b))
+    (hF0 : ∀ t ∈ Set.Icc a b, 0 ≤ F t) (hG0 : ∀ t ∈ Set.Icc a b, 0 ≤ G t) :
+    ∫ t in a..b, Real.sqrt (F t) * Real.sqrt (G t)
+      ≤ Real.sqrt (∫ t in a..b, F t) * Real.sqrt (∫ t in a..b, G t) := by
+  classical
+  set IF := ∫ t in a..b, F t with hIF
+  set IG := ∫ t in a..b, G t with hIG
+  have hFi : IntervalIntegrable F MeasureTheory.volume a b :=
+    hF.intervalIntegrable (by rwa [Set.uIcc_of_le hab])
+  have hGi : IntervalIntegrable G MeasureTheory.volume a b :=
+    hG.intervalIntegrable (by rwa [Set.uIcc_of_le hab])
+  have hIF0 : 0 ≤ IF := intervalIntegral.integral_nonneg hab hF0
+  have hIG0 : 0 ≤ IG := intervalIntegral.integral_nonneg hab hG0
+  have hkey : ∀ ε : ℝ, 0 < ε →
+      (∫ t in a..b, Real.sqrt (F t) * Real.sqrt (G t))
+        ≤ Real.sqrt ((IF + ε) * (IG + ε)) := by
+    intro ε hε
+    have hIFε : 0 < IF + ε := by linarith
+    have hIGε : 0 < IG + ε := by linarith
+    set lam := Real.sqrt ((IG + ε) / (IF + ε)) with hlam
+    have hlam0 : 0 < lam := Real.sqrt_pos.mpr (div_pos hIGε hIFε)
+    have hpt : ∀ t ∈ Set.Icc a b,
+        Real.sqrt (F t) * Real.sqrt (G t) ≤ (lam * F t + G t / lam) / 2 := by
+      intro t ht
+      have h1 : 0 ≤ lam * F t := mul_nonneg hlam0.le (hF0 t ht)
+      have h2 : 0 ≤ G t / lam := div_nonneg (hG0 t ht) hlam0.le
+      have hsq : Real.sqrt (lam * F t) * Real.sqrt (G t / lam)
+          = Real.sqrt (F t) * Real.sqrt (G t) := by
+        rw [← Real.sqrt_mul h1, ← Real.sqrt_mul (hF0 t ht)]
+        congr 1
+        field_simp
+      nlinarith [sq_nonneg (Real.sqrt (lam * F t) - Real.sqrt (G t / lam)),
+        Real.sq_sqrt h1, Real.sq_sqrt h2, hsq,
+        Real.sqrt_nonneg (lam * F t), Real.sqrt_nonneg (G t / lam)]
+    have hSGi : IntervalIntegrable (fun t => Real.sqrt (F t) * Real.sqrt (G t))
+        MeasureTheory.volume a b := by
+      refine ContinuousOn.intervalIntegrable ?_
+      rw [Set.uIcc_of_le hab]
+      exact (hF.sqrt).mul (hG.sqrt)
+    have hRHSi : IntervalIntegrable (fun t => (lam * F t + G t / lam) / 2)
+        MeasureTheory.volume a b :=
+      (((hFi.const_mul lam).add (hGi.div_const lam)).div_const 2)
+    have hint := intervalIntegral.integral_mono_on hab hSGi hRHSi hpt
+    have hval : (∫ t in a..b, (lam * F t + G t / lam) / 2)
+        = (lam * IF + IG / lam) / 2 := by
+      rw [intervalIntegral.integral_div, intervalIntegral.integral_add
+        (hFi.const_mul lam) (hGi.div_const lam),
+        intervalIntegral.integral_const_mul, intervalIntegral.integral_div]
+    have hbound : (lam * IF + IG / lam) / 2 ≤ Real.sqrt ((IF + ε) * (IG + ε)) := by
+      have hlam_sq : lam ^ 2 = (IG + ε) / (IF + ε) :=
+        Real.sq_sqrt (div_nonneg hIGε.le hIFε.le)
+      have h1 : lam * (IF + ε) = Real.sqrt ((IF + ε) * (IG + ε)) := by
+        rw [hlam, ← Real.sqrt_sq hIFε.le, ← Real.sqrt_mul (sq_nonneg _)]
+        congr 1
+        field_simp
+        ring
+      have h2 : (IG + ε) / lam = Real.sqrt ((IF + ε) * (IG + ε)) := by
+        rw [eq_comm, div_eq_iff hlam0.ne', hlam,
+          ← Real.sqrt_sq hIGε.le, ← Real.sqrt_mul_self hIFε.le]
+        rw [← Real.sqrt_mul (mul_self_nonneg _), ← Real.sqrt_mul
+          (mul_nonneg hIFε.le hIGε.le)]
+        congr 1
+        field_simp
+        ring
+      have hle1 : lam * IF ≤ lam * (IF + ε) :=
+        mul_le_mul_of_nonneg_left (by linarith) hlam0.le
+      have hle2 : IG / lam ≤ (IG + ε) / lam := by
+        have h := mul_le_mul_of_nonneg_right (show IG ≤ IG + ε by linarith)
+          (le_of_lt (inv_pos.mpr hlam0))
+        simpa [div_eq_mul_inv] using h
+      calc (lam * IF + IG / lam) / 2
+          ≤ (lam * (IF + ε) + (IG + ε) / lam) / 2 := by linarith
+        _ = Real.sqrt ((IF + ε) * (IG + ε)) := by rw [h1, h2]; ring
+    calc (∫ t in a..b, Real.sqrt (F t) * Real.sqrt (G t))
+        ≤ (lam * IF + IG / lam) / 2 := le_of_le_of_eq hint hval
+      _ ≤ Real.sqrt ((IF + ε) * (IG + ε)) := hbound
+  have hlim : Filter.Tendsto (fun ε : ℝ => Real.sqrt ((IF + ε) * (IG + ε)))
+      (nhdsWithin 0 (Set.Ioi 0)) (nhds (Real.sqrt IF * Real.sqrt IG)) := by
+    have hc : Continuous fun ε : ℝ => Real.sqrt ((IF + ε) * (IG + ε)) := by
+      fun_prop
+    have h0 : Real.sqrt ((IF + 0) * (IG + 0)) = Real.sqrt IF * Real.sqrt IG := by
+      rw [add_zero, add_zero, Real.sqrt_mul hIF0]
+    have := hc.tendsto 0
+    rw [h0] at this
+    exact this.mono_left nhdsWithin_le_nhds
+  refine ge_of_tendsto hlim ?_
+  filter_upwards [self_mem_nhdsWithin] with ε hε
+  exact hkey ε hε
+
+/-- Weighted Cauchy–Schwarz: `∑ p·√u·√v ≤ √(∑ p u)·√(∑ p v)`. -/
+private lemma weighted_cs {ι : Type*} (s : Finset ι) (p u v : ι → ℝ)
+    (hp : ∀ i ∈ s, 0 ≤ p i) :
+    ∑ i ∈ s, p i * (Real.sqrt (u i) * Real.sqrt (v i))
+      ≤ Real.sqrt (∑ i ∈ s, p i * u i) * Real.sqrt (∑ i ∈ s, p i * v i) := by
+  by_cases hall : ∀ i ∈ s, 0 ≤ u i ∧ 0 ≤ v i
+  · have h := sum_le_sqrt_mul_sqrt s
+      (fun i => Real.sqrt (p i) * Real.sqrt (u i))
+      (fun i => Real.sqrt (p i) * Real.sqrt (v i))
+      (fun i _ => mul_nonneg (Real.sqrt_nonneg _) (Real.sqrt_nonneg _))
+      (fun i _ => mul_nonneg (Real.sqrt_nonneg _) (Real.sqrt_nonneg _))
+    have e1 : ∀ i ∈ s, (Real.sqrt (p i) * Real.sqrt (u i))
+        * (Real.sqrt (p i) * Real.sqrt (v i))
+        = p i * (Real.sqrt (u i) * Real.sqrt (v i)) := by
+      intro i hi
+      have : Real.sqrt (p i) * Real.sqrt (p i) = p i :=
+        Real.mul_self_sqrt (hp i hi)
+      calc (Real.sqrt (p i) * Real.sqrt (u i))
+            * (Real.sqrt (p i) * Real.sqrt (v i))
+          = (Real.sqrt (p i) * Real.sqrt (p i))
+            * (Real.sqrt (u i) * Real.sqrt (v i)) := by ring
+        _ = p i * (Real.sqrt (u i) * Real.sqrt (v i)) := by rw [this]
+    have e2 : ∀ i ∈ s, (Real.sqrt (p i) * Real.sqrt (u i)) ^ 2 = p i * u i := by
+      intro i hi
+      rw [mul_pow, Real.sq_sqrt (hp i hi), Real.sq_sqrt (hall i hi).1]
+    have e3 : ∀ i ∈ s, (Real.sqrt (p i) * Real.sqrt (v i)) ^ 2 = p i * v i := by
+      intro i hi
+      rw [mul_pow, Real.sq_sqrt (hp i hi), Real.sq_sqrt (hall i hi).2]
+    rw [Finset.sum_congr rfl e1, Finset.sum_congr rfl e2,
+      Finset.sum_congr rfl e3] at h
+    exact h
+  · push_neg at hall
+    obtain ⟨i₀, hi₀, hneg⟩ := hall
+    exact absurd hneg (by
+      push_neg
+      intro hu
+      by_contra hv
+      push_neg at hv
+      exact absurd hu (not_le.mpr (by linarith [hv])) |>.elim) |>.elim
+
+/-! #### Continuity toolbox (all in `t`, on closed cells below `T_o`) -/
+
+private lemma continuous_gamB : Continuous gam := by
+  have : Continuous fun t : ℝ => -(obsT - t) :=
+    (continuous_const.sub continuous_id).neg
+  exact Real.continuous_exp.comp this
+
+private lemma continuousOn_aB' {a b : ℝ} (hb : b ≤ obsT) :
+    ContinuousOn D.aB (Set.Icc a b) := by
+  refine ContinuousOn.div
+    ((D.continuous_gamB.mul continuous_const).continuousOn)
+    ((continuous_const.sub (continuous_const.mul
+      (D.continuous_gamB.pow 2))).continuousOn) ?_
+  intro t ht
+  exact ne_of_gt (D.den_pos (le_trans ht.2 hb))
+
+private lemma continuousOn_bB' {a b : ℝ} (hb : b ≤ obsT) :
+    ContinuousOn D.bB (Set.Icc a b) := by
+  refine ContinuousOn.div
+    ((continuous_const.mul (continuous_const.sub
+      (D.continuous_gamB.pow 2))).continuousOn)
+    ((continuous_const.sub (continuous_const.mul
+      (D.continuous_gamB.pow 2))).continuousOn) ?_
+  intro t ht
+  exact ne_of_gt (D.den_pos (le_trans ht.2 hb))
+
+private lemma continuousOn_mB' {a b : ℝ} (hb : b ≤ obsT) (x y ζ : Cube n)
+    (j : Fin n) : ContinuousOn (fun t => D.mB t x y ζ j) (Set.Icc a b) := by
+  simp only [mB]
+  exact ((D.continuousOn_aB' hb).mul continuousOn_const).add
+    ((((D.continuousOn_bB' hb).mul continuousOn_const).mul
+      continuousOn_const).mul continuousOn_const)
+
+private lemma continuousOn_dmext_mB' {a b : ℝ} (hb : b ≤ obsT)
+    (φ : Cube n → ℝ) (i : Fin n) (x y ζ : Cube n) :
+    ContinuousOn (fun t => dmext φ i (D.mB t x y ζ)) (Set.Icc a b) := by
+  simp only [dmext]
+  refine continuousOn_finset_sum _ fun w _ => ?_
+  refine ContinuousOn.mul (ContinuousOn.div_const ?_ 2) continuousOn_const
+  refine ContinuousOn.mul continuousOn_const ?_
+  refine continuousOn_finset_prod _ fun j _ => ?_
+  exact (continuousOn_const.add ((D.continuousOn_mB' hb x y ζ j).mul
+    continuousOn_const)).div_const 2
+
+private lemma continuousOn_Hlik' {a b : ℝ} (hbT : b < D.T) (ζ x : Cube n) :
+    ContinuousOn (fun t => D.Hlik t ζ x) (Set.Icc a b) := fun t ht =>
+  ((D.hasDerivAt_Hlik (lt_of_le_of_lt ht.2 hbT) ζ x).continuousAt).continuousWithinAt
+
+private lemma continuousOn_lam' {a b : ℝ} (hb : b ≤ obsT) (i : Fin n)
+    (x ζ : Cube n) : ContinuousOn (fun t => D.lam t i x ζ) (Set.Icc a b) := by
+  have hexp : Continuous fun t : ℝ => Real.exp (-(D.T - t)) :=
+    Real.continuous_exp.comp ((continuous_const.sub continuous_id).neg)
+  simp only [lam]
+  refine ContinuousOn.div
+    ((continuous_const.sub ((hexp.mul continuous_const).mul
+      continuous_const)).continuousOn)
+    ((continuous_const.add ((hexp.mul continuous_const).mul
+      continuous_const)).continuousOn) ?_
+  intro t ht
+  have habs := D.abs_exp_le_a (le_trans ht.2 hb)
+  rw [abs_of_pos (Real.exp_pos _)] at habs
+  have ha1 := D.ha1
+  have hb1 : Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i)
+      = Real.exp (-(D.T - t)) * (toR (x i) * toR (ζ i)) := by ring
+  rcases toR_eq_one_or (x i) with hx | hx <;>
+    rcases toR_eq_one_or (ζ i) with hζ | hζ <;>
+      rw [hb1, hx, hζ] <;> [skip; skip; skip; skip] <;>
+      · intro hzero
+        nlinarith [Real.exp_pos (-(D.T - t))]
+
+private lemma Gam_nonneg {t : ℝ} (ht : t ≤ obsT) (φ : Cube n → ℝ)
+    (x y : Cube n) : 0 ≤ D.Gam φ t x y := by
+  refine Finset.sum_nonneg fun ζ _ => mul_nonneg
+    (D.Hlik_nonneg (le_trans ht D.obsT_lt_T.le) ζ x) ?_
+  refine Finset.sum_nonneg fun i _ => ?_
+  exact mul_nonneg (mul_nonneg (D.lam_pos ht i x ζ).le
+    (add_nonneg (sq_nonneg _) (sq_nonneg _))) (sq_nonneg _)
+
+private lemma continuousOn_Gam' {a b : ℝ} (hb : b ≤ obsT) (hbT : b < D.T)
+    (φ : Cube n → ℝ) (x y : Cube n) :
+    ContinuousOn (fun t => D.Gam φ t x y) (Set.Icc a b) := by
+  simp only [Gam]
+  refine continuousOn_finset_sum _ fun ζ _ => ContinuousOn.mul
+    (D.continuousOn_Hlik' hbT ζ x) ?_
+  refine continuousOn_finset_sum _ fun i _ => ?_
+  exact ((D.continuousOn_lam' hb i x ζ).mul
+      (((D.continuousOn_aB' hb).pow 2).add
+        ((D.continuousOn_bB' hb).pow 2))).mul
+    ((D.continuousOn_dmext_mB' hb φ i x y ζ).pow 2)
+
+/-! #### The per-flow energy bound (B1–B5) -/
+
+/-- The accumulated `Γ`-energy of one coupling flow, for a given test. -/
+private noncomputable def gamE (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) : ℝ :=
+  ∑ k ∈ Finset.range c.K, ∫ t in c.z k..c.z (k + 1),
+    ∑ s : JSt n, c.π k t s * D.Gam φ t s.1 s.2.1
+
+/-- Alive score integrand of `scoreEnergy`, named for reuse. -/
+private noncomputable def scInt {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) (k : ℕ) (t : ℝ) : ℝ :=
+  ∑ s : JSt n, (if s.2.2 then c.π k t s * ∑ i, D.Sc t i s.1 ^ 2 else 0)
+
+private lemma scoreEnergy_eq {ℓ θ : ℝ} {x₀ : Cube n} (c : D.CFlow ℓ θ x₀) :
+    D.scoreEnergy c = ∑ k ∈ Finset.range c.K,
+      ∫ t in c.z k..c.z (k + 1), D.scInt c k t := rfl
+
+/-- Continuity of the alive score integrand on a closed cell. -/
+private lemma continuousOn_scInt {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) {k : ℕ} (hk : k < c.K) :
+    ContinuousOn (D.scInt c k) (Set.Icc (c.z k) (c.z (k + 1))) := by
+  have hsub : Set.Icc (c.z k) (c.z (k + 1)) ⊆ Set.Iic D.T := fun t ht =>
+    le_trans ht.2 (le_trans (D.cell_le_obsT c hk) D.obsT_lt_T.le)
+  refine continuousOn_finset_sum _ fun s _ => ?_
+  by_cases hs : s.2.2
+  · simp only [scInt, if_pos hs]
+    refine ((c.is.glued.flow k hk).cont s).mul
+      (continuousOn_finset_sum _ fun i _ => ?_)
+    have hY : ContinuousOn (fun t => D.Y t i s.1)
+        (Set.Icc (c.z k) (c.z (k + 1))) := (D.continuousOn_Y i s.1).mono hsub
+    simpa [Sc] using ((continuousOn_const.sub hY).div_const 2).pow 2
+  · simp only [scInt, if_neg hs]
+    exact continuousOn_const
+
+/-- Continuity of the `Γ`-pairing integrand on a closed cell. -/
+private lemma continuousOn_gamInt (φ : Cube n → ℝ) {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) {k : ℕ} (hk : k < c.K) :
+    ContinuousOn (fun t => ∑ s : JSt n, c.π k t s * D.Gam φ t s.1 s.2.1)
+      (Set.Icc (c.z k) (c.z (k + 1))) := by
+  have hb : c.z (k + 1) ≤ obsT := D.cell_le_obsT c hk
+  have hbT : c.z (k + 1) < D.T := lt_of_le_of_lt hb D.obsT_lt_T
+  exact continuousOn_finset_sum _ fun s _ =>
+    ((c.is.glued.flow k hk).cont s).mul (D.continuousOn_Gam' hb hbT φ s.1 s.2.1)
+
+private lemma scInt_nonneg {ℓ θ : ℝ} (hθ : θ ≤ obsT) {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) {k : ℕ} (hk : k < c.K) {t : ℝ}
+    (ht : t ∈ Set.Icc (c.z k) (c.z (k + 1))) : 0 ≤ D.scInt c k t := by
+  refine Finset.sum_nonneg fun s _ => ?_
+  by_cases hs : s.2.2
+  · simp only [scInt, if_pos hs]
+    exact mul_nonneg (D.cflow_nonneg hθ c hk ht s)
+      (Finset.sum_nonneg fun i _ => sq_nonneg _)
+  · simp only [scInt, if_neg hs]
+
+private lemma gamInt_nonneg (φ : Cube n → ℝ) {ℓ θ : ℝ} (hθ : θ ≤ obsT)
+    {x₀ : Cube n} (c : D.CFlow ℓ θ x₀) {k : ℕ} (hk : k < c.K) {t : ℝ}
+    (ht : t ∈ Set.Icc (c.z k) (c.z (k + 1))) :
+    0 ≤ ∑ s : JSt n, c.π k t s * D.Gam φ t s.1 s.2.1 := by
+  have htB : t ≤ obsT := le_trans ht.2 (D.cell_le_obsT c hk)
+  exact Finset.sum_nonneg fun s _ => mul_nonneg (D.cflow_nonneg hθ c hk ht s)
+    (D.Gam_nonneg htB φ s.1 s.2.1)
+
+/-- (B1)+(B2): pointwise-in-`t` bound of the perturbation pairing by the
+geometric mean of the score and `Γ` integrands. -/
+private lemma abs_pertPair_le (B : Finset (Cube n)) {ℓ θ : ℝ}
+    (hθ0 : obsT - 1 ≤ θ) (hθ : θ ≤ obsT) {x₀ : Cube n} (c : D.CFlow ℓ θ x₀)
+    {k : ℕ} (hk : k < c.K) {t : ℝ}
+    (ht : t ∈ Set.Icc (c.z k) (c.z (k + 1))) :
+    |D.pertPair (fun w => if w ∈ B then (1 : ℝ) else 0) c k t|
+      ≤ Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a * D.dbar ℓ θ x₀
+        * (Real.sqrt (D.scInt c k t)
+          * Real.sqrt (∑ s : JSt n, c.π k t s *
+              D.Gam (fun w => if w ∈ B then (1 : ℝ) else 0) t s.1 s.2.1)) := by
+  classical
+  set φ : Cube n → ℝ := fun w => if w ∈ B then (1 : ℝ) else 0 with hφdef
+  have hφ01 : ∀ w, φ w = 0 ∨ φ w = 1 := by
+    intro w; by_cases hw : w ∈ B <;> simp [hφdef, hw]
+  have htB : t ≤ obsT := le_trans ht.2 (D.cell_le_obsT c hk)
+  have htθ : θ ≤ t := by
+    have h0 := D.grid_le'' c k 0 (Nat.zero_le k) hk.le
+    rw [c.is.grid.first] at h0
+    exact le_trans h0 ht.1
+  have hθo : θ ≤ obsT := le_trans htθ htB
+  have hπ0 : ∀ s : JSt n, 0 ≤ c.π k t s := fun s => D.cflow_nonneg hθ c hk ht s
+  set p : JSt n → ℝ := fun s => if s.2.2 then c.π k t s else 0 with hpdef
+  have hp0 : ∀ s : JSt n, 0 ≤ p s := by
+    intro s
+    by_cases hs : s.2.2 <;> simp [hpdef, hs, hπ0 s]
+  set Cst := Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a with hCst
+  have hCst0 : 0 ≤ Cst := by
+    have h1 : (0:ℝ) ≤ Real.sqrt 8 := Real.sqrt_nonneg _
+    have h2 : (0:ℝ) ≤ Real.sqrt (kappa D.a) := Real.sqrt_nonneg _
+    have h3 : (0:ℝ) ≤ Lam D.a :=
+      le_trans zero_le_one (one_le_Lam D.ha0 D.ha1)
+    positivity
+  have hd0 : 0 ≤ D.dbar ℓ θ x₀ := D.dbar_nonneg ℓ θ x₀
+  -- step 1+2: triangle + the pointwise perturbation bound
+  have hstep12 : |D.pertPair φ c k t|
+      ≤ ∑ s : JSt n, p s * (Cst * D.dbar ℓ θ x₀ *
+          (Real.sqrt (∑ i, D.Sc t i s.1 ^ 2)
+            * Real.sqrt (D.Gam φ t s.1 s.2.1))) := by
+    have h1 : |D.pertPair φ c k t|
+        ≤ ∑ s : JSt n, p s * |D.pertU φ ℓ θ x₀ t s.1 s.2.1| := by
+      refine le_trans (Finset.abs_sum_le_sum_abs _ _) ?_
+      refine Finset.sum_le_sum fun s _ => ?_
+      by_cases hs : s.2.2
+      · simp only [if_pos hs, hpdef, abs_mul, abs_of_nonneg (hπ0 s)]
+      · simp [hpdef, hs]
+    refine le_trans h1 (Finset.sum_le_sum fun s _ => ?_)
+    refine mul_le_mul_of_nonneg_left ?_ (hp0 s)
+    have := D.abs_pertU_le (θ := θ) (ℓ := ℓ) (x₀ := x₀) htθ htB hθo hφ01 s.1 s.2.1
+    calc |D.pertU φ ℓ θ x₀ t s.1 s.2.1|
+        ≤ Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a * D.dbar ℓ θ x₀
+          * Real.sqrt (∑ i, D.Sc t i s.1 ^ 2)
+          * Real.sqrt (D.Gam φ t s.1 s.2.1) := this
+      _ = Cst * D.dbar ℓ θ x₀ * (Real.sqrt (∑ i, D.Sc t i s.1 ^ 2)
+          * Real.sqrt (D.Gam φ t s.1 s.2.1)) := by rw [hCst]; ring
+  -- step 3: pull the constants out
+  have hstep3 : ∑ s : JSt n, p s * (Cst * D.dbar ℓ θ x₀ *
+        (Real.sqrt (∑ i, D.Sc t i s.1 ^ 2)
+          * Real.sqrt (D.Gam φ t s.1 s.2.1)))
+      = Cst * D.dbar ℓ θ x₀ * ∑ s : JSt n, p s *
+          (Real.sqrt (∑ i, D.Sc t i s.1 ^ 2)
+            * Real.sqrt (D.Gam φ t s.1 s.2.1)) := by
+    rw [Finset.mul_sum]
+    exact Finset.sum_congr rfl fun s _ => by ring
+  -- step 4: weighted Cauchy–Schwarz over the state space
+  have hstep4 : ∑ s : JSt n, p s *
+        (Real.sqrt (∑ i, D.Sc t i s.1 ^ 2)
+          * Real.sqrt (D.Gam φ t s.1 s.2.1))
+      ≤ Real.sqrt (∑ s : JSt n, p s * ∑ i, D.Sc t i s.1 ^ 2)
+        * Real.sqrt (∑ s : JSt n, p s * D.Gam φ t s.1 s.2.1) :=
+    weighted_cs Finset.univ p _ _ (fun s _ => hp0 s)
+  -- step 5: identify/dominate the two factors
+  have hfac1 : (∑ s : JSt n, p s * ∑ i, D.Sc t i s.1 ^ 2) = D.scInt c k t := by
+    refine Finset.sum_congr rfl fun s _ => ?_
+    by_cases hs : s.2.2 <;> simp [hpdef, scInt, hs]
+  have hfac2 : (∑ s : JSt n, p s * D.Gam φ t s.1 s.2.1)
+      ≤ ∑ s : JSt n, c.π k t s * D.Gam φ t s.1 s.2.1 := by
+    refine Finset.sum_le_sum fun s _ => ?_
+    by_cases hs : s.2.2
+    · simp [hpdef, hs]
+    · simp only [hpdef, if_neg hs, zero_mul]
+      exact mul_nonneg (hπ0 s) (D.Gam_nonneg htB φ s.1 s.2.1)
+  calc |D.pertPair φ c k t|
+      ≤ Cst * D.dbar ℓ θ x₀ * ∑ s : JSt n, p s *
+          (Real.sqrt (∑ i, D.Sc t i s.1 ^ 2)
+            * Real.sqrt (D.Gam φ t s.1 s.2.1)) := by
+        rw [← hstep3]; exact hstep12
+    _ ≤ Cst * D.dbar ℓ θ x₀ *
+        (Real.sqrt (D.scInt c k t)
+          * Real.sqrt (∑ s : JSt n, c.π k t s * D.Gam φ t s.1 s.2.1)) := by
+        refine mul_le_mul_of_nonneg_left ?_ (mul_nonneg hCst0 hd0)
+        refine le_trans hstep4 ?_
+        rw [hfac1]
+        exact mul_le_mul_of_nonneg_left
+          (Real.sqrt_le_sqrt hfac2) (Real.sqrt_nonneg _)
+    _ = Real.sqrt 8 * Real.sqrt (kappa D.a) * Lam D.a * D.dbar ℓ θ x₀
+        * (Real.sqrt (D.scInt c k t)
+          * Real.sqrt (∑ s : JSt n, c.π k t s * D.Gam φ t s.1 s.2.1)) := by
+        rw [hCst]
 
 /-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
 `C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
