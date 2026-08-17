@@ -94,34 +94,100 @@ lemma tA_pos : 0 < D.tA := by
 lemma obsT_lt_T : obsT < D.T := by
   have := D.tA_pos; simp only [T]; linarith
 
+/-- `|e^{-s}| ≤ 1` for `s ≥ 0`: the smoothing parameter stays in the solid
+cube along the (forward) heat flow. -/
+lemma abs_exp_neg_le_one {s : ℝ} (hs : 0 ≤ s) : |Real.exp (-s)| ≤ 1 := by
+  rw [abs_of_pos (Real.exp_pos _)]
+  simpa using Real.exp_le_exp.mpr (neg_nonpos.mpr hs)
+
 lemma fs_pos {s : ℝ} (hs : 0 ≤ s) (x : Cube n) : 0 < D.fs s x := by
-  sorry
+  simp only [fs, heatAt]
+  exact smooth_pos (abs_exp_neg_le_one hs) D.hf x
+
+lemma fs_ne_zero {s : ℝ} (hs : 0 ≤ s) (x : Cube n) : D.fs s x ≠ 0 :=
+  (D.fs_pos hs x).ne'
 
 lemma fs_zero (x : Cube n) : D.fs 0 x = D.f x := by
-  sorry
+  simp only [fs, heatAt, neg_zero, Real.exp_zero, smooth_one]
 
 /-- Mass conservation along the heat flow. -/
 lemma unifE_fs (s : ℝ) : unifE (D.fs s) = 1 := by
-  sorry
+  simp only [fs, heatAt]
+  rw [unifE_smooth, D.hm]
+
+/-- `0 ≤ T - t` whenever `t ≤ T`; the heat time along the reverse process. -/
+lemma T_sub_nonneg {t : ℝ} (ht : t ≤ D.T) : (0 : ℝ) ≤ D.T - t := by linarith
 
 lemma Y_pos {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (x : Cube n) :
     0 < D.Y t i x := by
-  sorry
+  simp only [Y]
+  exact div_pos (D.fs_pos (D.T_sub_nonneg ht) _) (D.fs_pos (D.T_sub_nonneg ht) _)
+
+lemma Y_ne_zero {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (x : Cube n) :
+    D.Y t i x ≠ 0 := (D.Y_pos ht i x).ne'
+
+lemma kappa_pos : 0 < kappa D.a := lt_trans one_pos (one_lt_kappa D.ha0 D.ha1)
+
+/-- Before the observation time the smoothing parameter is at most the bias:
+`e^{-(T-t)} ≤ a` for `t ≤ T_o`. -/
+lemma abs_exp_le_a {t : ℝ} (ht : t ≤ obsT) :
+    |Real.exp (-(D.T - t))| ≤ D.a := by
+  rw [abs_of_pos (Real.exp_pos _)]
+  simp only [obsT] at ht
+  have hle : D.tA ≤ D.T - t := by simp only [T, obsT]; linarith
+  calc Real.exp (-(D.T - t)) ≤ Real.exp (-D.tA) := Real.exp_le_exp.mpr (by linarith)
+    _ = D.a := by rw [tA, neg_neg, Real.exp_log D.ha0]
+
+lemma le_T_of_le_obsT {t : ℝ} (ht : t ≤ obsT) : t ≤ D.T := le_trans ht D.obsT_lt_T.le
+
+/-- Involutivity of the edge ratio, in the form needed before `Y_flipCoord`. -/
+lemma Y_flipCoord_aux (t : ℝ) (i : Fin n) (x : Cube n) :
+    D.Y t i (flipCoord i x) = (D.Y t i x)⁻¹ := by
+  simp only [Y, flipCoord_flipCoord, inv_div]
 
 /-- **Edge-ratio bound** [C Lemma 5 / LGF eq (4.4)]: for `t ≤ T_o`,
 `κ_a⁻¹ ≤ Y_i(t,x) ≤ κ_a`. -/
 lemma Y_le_kappa {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x : Cube n) :
     D.Y t i x ≤ kappa D.a := by
-  sorry
+  have hpos := D.fs_pos (D.T_sub_nonneg (D.le_T_of_le_obsT ht)) x
+  simp only [Y]
+  rw [div_le_iff₀ hpos, kappa]
+  simp only [fs, heatAt]
+  exact smooth_flipCoord_le (D.abs_exp_le_a ht) D.ha1 (fun y => (D.hf y).le) i x
 
 lemma kappa_inv_le_Y {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x : Cube n) :
     (kappa D.a)⁻¹ ≤ D.Y t i x := by
-  sorry
+  have hY : 0 < D.Y t i x := D.Y_pos (D.le_T_of_le_obsT ht) i x
+  have h := D.Y_le_kappa ht i (flipCoord i x)
+  rw [D.Y_flipCoord_aux] at h
+  have h1 : 1 ≤ D.Y t i x * kappa D.a := by
+    have := mul_le_mul_of_nonneg_left h hY.le
+    rwa [mul_inv_cancel₀ hY.ne'] at this
+  rw [inv_eq_one_div, div_le_iff₀ D.kappa_pos]
+  exact h1
 
 @[simp] lemma Y_flipCoord (t : ℝ) (i : Fin n) (x : Cube n) :
-    D.Y t i (flipCoord i x) = (D.Y t i x)⁻¹ := by
-  sorry
+    D.Y t i (flipCoord i x) = (D.Y t i x)⁻¹ := D.Y_flipCoord_aux t i x
 
+/-- `F_t(σ_i x) - F_t(x) = log Y_i(t,x)`, for `t ≤ T` (where `f_{T-t} > 0`).
+This is `F_flipCoord_sub` with the (necessary) time restriction; see the
+STATEMENT-ISSUE note there. -/
+lemma F_flipCoord_sub_of_le {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (x : Cube n) :
+    D.F t (flipCoord i x) - D.F t x = Real.log (D.Y t i x) := by
+  simp only [F, Y]
+  rw [Real.log_div (D.fs_ne_zero (D.T_sub_nonneg ht) _) (D.fs_ne_zero (D.T_sub_nonneg ht) _)]
+
+-- STATEMENT-ISSUE: as stated (for *every* `t : ℝ`) this lemma is false; it
+-- needs `t ≤ D.T`, which is exactly `F_flipCoord_sub_of_le` above (proved, and
+-- used everywhere in this development).  For `t > D.T` the heat parameter
+-- `ρ = e^{-(T-t)}` exceeds `1`, the multilinear extension `f_{T-t}` may vanish,
+-- and both sides degenerate differently because `Real.log 0 = 0`.
+-- Falsity witness: `n = 1`, `a` arbitrary, `f 1 = 1/2`, `f (-1) = 3/2`
+-- (so `f > 0` and `unifE f = 1`).  At `ρ = 2`, i.e. `t = D.T + log 2`, one has
+--   `f_{T-t} x = (1+2)/2·(1/2) + (1-2)/2·(3/2) = 0` at `x = (1)`, while
+--   `f_{T-t} (σ x) = (1-2)/2·(1/2) + (1+2)/2·(3/2) = 2`.
+-- Then LHS `= log 2 - log 0 = log 2 ≠ 0`, whereas
+-- `Y = 2 / 0 = 0` so RHS `= log 0 = 0`.
 /-- `F_t(σ_i x) - F_t(x) = log Y_i(t,x)`. -/
 lemma F_flipCoord_sub (t : ℝ) (i : Fin n) (x : Cube n) :
     D.F t (flipCoord i x) - D.F t x = Real.log (D.Y t i x) := by
@@ -129,22 +195,135 @@ lemma F_flipCoord_sub (t : ℝ) (i : Fin n) (x : Cube n) :
 
 /-! ## Heat-flow derivative identities -/
 
+/-- Flux identity `Y_i(t,y)·f_{T-t}(y) = f_{T-t}(σ_i y)`; this is what makes
+`ν_{T-t}` the exact solution of the reverse forward equation. -/
+lemma Y_mul_fs {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (y : Cube n) :
+    D.Y t i y * D.fs (D.T - t) y = D.fs (D.T - t) (flipCoord i y) := by
+  have hy : D.fs (D.T - t) y ≠ 0 := D.fs_ne_zero (D.T_sub_nonneg ht) y
+  simp only [Y]
+  field_simp
+
+/-- Reverse-time heat equation: `d/dt f_{T-t}(x) = -L f_{T-t}(x)`. -/
+lemma hasDerivAt_fs_sub (t : ℝ) (x : Cube n) :
+    HasDerivAt (fun t => D.fs (D.T - t) x) (-(cubeLap (D.fs (D.T - t)) x)) t := by
+  have h1 : HasDerivAt (fun s : ℝ => smooth (Real.exp (-s)) D.f x)
+      (cubeLap (smooth (Real.exp (-(D.T - t))) D.f) x) (D.T - t) :=
+    hasDerivAt_smooth_exp D.f x (D.T - t)
+  have h2 : HasDerivAt (fun u : ℝ => D.T - u) (-1) t := by
+    simpa using (hasDerivAt_const t D.T).sub (hasDerivAt_id t)
+  have h3 := h1.comp t h2
+  rw [mul_neg_one] at h3
+  simpa only [fs, heatAt, Function.comp_def] using h3
+
+/-- `L f_{T-t}(x) = f_{T-t}(x)·∑_i (Y_i - 1)/2`. -/
+lemma cubeLap_fs_eq {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
+    cubeLap (D.fs (D.T - t)) x = D.fs (D.T - t) x * ∑ i, (D.Y t i x - 1) / 2 := by
+  have hb : D.fs (D.T - t) x ≠ 0 := D.fs_ne_zero (D.T_sub_nonneg ht) x
+  simp only [cubeLap, Y, Finset.mul_sum]
+  rw [Finset.sum_div]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  field_simp
+
 /-- `∂_t F_t(x) = ∑_i S_i(t,x)` [LGF eq (3.8)]. -/
 lemma hasDerivAt_F {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
     HasDerivAt (fun t => D.F t x) (∑ i, D.Sc t i x) t := by
-  sorry
+  have hb : D.fs (D.T - t) x ≠ 0 := D.fs_ne_zero (D.T_sub_nonneg ht) x
+  have hsum : ∑ i, D.Sc t i x + ∑ i, (D.Y t i x - 1) / 2 = 0 := by
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_eq_zero fun i _ => ?_
+    simp only [Sc]; ring
+  have h2 : ∑ i, D.Sc t i x = -∑ i, (D.Y t i x - 1) / 2 := by linarith
+  have hval : -(cubeLap (D.fs (D.T - t)) x) / D.fs (D.T - t) x = ∑ i, D.Sc t i x := by
+    rw [D.cubeLap_fs_eq ht x, h2]
+    field_simp
+  have h := (D.hasDerivAt_fs_sub t x).log hb
+  rw [hval] at h
+  simpa only [F] using h
+
+/-- Continuity in `t` of `t ↦ f_{T-t}(x)`. -/
+lemma continuous_fs_sub (x : Cube n) : Continuous fun t => D.fs (D.T - t) x := by
+  simp only [fs, heatAt]
+  exact (continuous_smooth_exp D.f x).comp (continuous_const.sub continuous_id)
 
 /-- Continuity of `(t,x) ↦ F_t(x)` in `t` on `(-∞, T]`. -/
 lemma continuousOn_F (x : Cube n) :
     ContinuousOn (fun t => D.F t x) (Set.Iic D.T) := by
-  sorry
+  simp only [F]
+  exact (D.continuous_fs_sub x).continuousOn.log fun t ht =>
+    D.fs_ne_zero (D.T_sub_nonneg (Set.mem_Iic.mp ht)) x
 
 /-- The reciprocal `e^{-F_t(V_t)}` is space-time harmonic:
 `∂_t e^{-F_t(x)} = -L̃_t(e^{-F_t(·)})(x)` [LGF, Step 2 of Prop 3.2's proof]. -/
 lemma hasDerivAt_exp_neg_F {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
     HasDerivAt (fun t => Real.exp (-(D.F t x)))
       (-(D.revGen t (fun y => Real.exp (-(D.F t y))) x)) t := by
-  sorry
+  have hflip : ∀ i : Fin n, Real.exp (-(D.F t (flipCoord i x)))
+      = Real.exp (-(D.F t x)) / D.Y t i x := by
+    intro i
+    have h1 : D.F t (flipCoord i x) = D.F t x + Real.log (D.Y t i x) := by
+      have := D.F_flipCoord_sub_of_le ht i x; linarith
+    have h3 : Real.exp (-Real.log (D.Y t i x)) = (D.Y t i x)⁻¹ := by
+      rw [Real.exp_neg, Real.exp_log (D.Y_pos ht i x)]
+    rw [h1, neg_add, Real.exp_add, h3, div_eq_mul_inv]
+  have key : D.revGen t (fun y => Real.exp (-(D.F t y))) x
+      = Real.exp (-(D.F t x)) * ∑ i, D.Sc t i x := by
+    simp only [revGen, hflip, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    have hY := D.Y_ne_zero ht i x
+    simp only [Sc]
+    field_simp
+  rw [key, ← mul_neg]
+  exact ((D.hasDerivAt_F ht x).neg).exp
+
+/-- The reverse forward-equation flux sum, in closed form. -/
+lemma sum_revFwdMat_mul_revDensity {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
+    ∑ x', D.revFwdMat t x x' * D.revDensity t x'
+      = -(cubeLap (D.fs (D.T - t)) x) / 2 ^ n := by
+  have hb : D.fs (D.T - t) x ≠ 0 := D.fs_ne_zero (D.T_sub_nonneg ht) x
+  -- split the two contributions
+  have hsplit : ∑ x' : Cube n, D.revFwdMat t x x' * D.revDensity t x'
+      = (∑ x' : Cube n, ∑ i : Fin n,
+          (if x = flipCoord i x' then D.Y t i x' / 2 else 0) * D.revDensity t x')
+        - ∑ x' : Cube n,
+            (if x = x' then ∑ i, D.Y t i x / 2 else 0) * D.revDensity t x' := by
+    rw [← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl fun x' _ => ?_
+    simp only [revFwdMat, sub_mul, Finset.sum_mul]
+  -- the incoming flux from the `i`-th neighbour
+  have hA : ∀ i : Fin n, ∑ x' : Cube n,
+      (if x = flipCoord i x' then D.Y t i x' / 2 else 0) * D.revDensity t x'
+      = D.fs (D.T - t) x / 2 / 2 ^ n := by
+    intro i
+    have hcond : ∀ x' : Cube n, (x = flipCoord i x') ↔ (x' = flipCoord i x) := by
+      intro x'
+      constructor
+      · rintro rfl; rw [flipCoord_flipCoord]
+      · rintro rfl; rw [flipCoord_flipCoord]
+    have h2 : D.Y t i (flipCoord i x) * D.fs (D.T - t) (flipCoord i x)
+        = D.fs (D.T - t) x := by
+      simpa using D.Y_mul_fs ht i (flipCoord i x)
+    simp only [hcond, ite_mul, zero_mul, Finset.sum_ite_eq', Finset.mem_univ, if_true,
+      revDensity]
+    calc D.Y t i (flipCoord i x) / 2 * (D.fs (D.T - t) (flipCoord i x) / 2 ^ n)
+        = D.Y t i (flipCoord i x) * D.fs (D.T - t) (flipCoord i x) / 2 / 2 ^ n := by ring
+      _ = D.fs (D.T - t) x / 2 / 2 ^ n := by rw [h2]
+  rw [hsplit, Finset.sum_comm, Finset.sum_congr rfl (fun i (_ : i ∈ Finset.univ) => hA i)]
+  simp only [ite_mul, zero_mul, Finset.sum_ite_eq, Finset.mem_univ, if_true,
+    Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, revDensity]
+  -- closed forms for the two sums
+  have hYsum : (∑ i, D.Y t i x / 2) * (D.fs (D.T - t) x / 2 ^ n)
+      = (∑ i, D.fs (D.T - t) (flipCoord i x)) / 2 / 2 ^ n := by
+    have h1 : ∑ i, D.fs (D.T - t) (flipCoord i x)
+        = (∑ i, D.Y t i x) * D.fs (D.T - t) x := by
+      rw [Finset.sum_mul]
+      exact (Finset.sum_congr rfl fun i _ => D.Y_mul_fs ht i x).symm
+    rw [h1, ← Finset.sum_div]
+    ring
+  rw [hYsum]
+  simp only [cubeLap]
+  rw [Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+    nsmul_eq_mul]
+  ring
 
 /-- The explicit density `revDensity` solves the forward (master) equation of
 the reverse process: `∂_t ν_{T-t}(x) = ∑_{x'} revFwdMat t x x' ν_{T-t}(x')`
@@ -152,12 +331,16 @@ the reverse process: `∂_t ν_{T-t}(x) = ∑_{x'} revFwdMat t x x' ν_{T-t}(x')
 lemma hasDerivAt_revDensity {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
     HasDerivAt (fun t => D.revDensity t x)
       (∑ x', D.revFwdMat t x x' * D.revDensity t x') t := by
-  sorry
+  rw [D.sum_revFwdMat_mul_revDensity ht x]
+  simp only [revDensity]
+  exact (D.hasDerivAt_fs_sub t x).div_const (2 ^ n)
 
 /-- Continuity in `t` of the rate matrix entries on `(-∞, T]`. -/
 lemma continuousOn_Y (i : Fin n) (x : Cube n) :
     ContinuousOn (fun t => D.Y t i x) (Set.Iic D.T) := by
-  sorry
+  simp only [Y]
+  exact (D.continuous_fs_sub _).continuousOn.div (D.continuous_fs_sub x).continuousOn
+    fun t ht => D.fs_ne_zero (D.T_sub_nonneg (Set.mem_Iic.mp ht)) x
 
 /-! ## Terminal likelihood `H_t^ζ` [LGF §5.2] -/
 
@@ -175,42 +358,199 @@ noncomputable def lam (t : ℝ) (i : Fin n) (x ζ : Cube n) : ℝ :=
   (1 - Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i))
     / (1 + Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i))
 
+/-- The Bayes kernel `∏_j (1 + ρ_t x_jζ_j)/2` appearing in `H_t^ζ`. -/
+noncomputable def kern (t : ℝ) (ζ x : Cube n) : ℝ :=
+  ∏ j, (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2
+
+lemma Hlik_eq (t : ℝ) (ζ x : Cube n) :
+    D.Hlik t ζ x = D.kern t ζ x * D.f ζ / D.fs (D.T - t) x := rfl
+
+lemma abs_exp_lt_one {t : ℝ} (ht : t < D.T) : |Real.exp (-(D.T - t))| < 1 := by
+  rw [abs_of_pos (Real.exp_pos _)]
+  simpa using Real.exp_lt_exp.mpr (show -(D.T - t) < 0 by linarith)
+
+lemma factor_pos {t : ℝ} (ht : t < D.T) (i : Fin n) (ζ x : Cube n) :
+    0 < 1 + Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i) :=
+  one_add_mul_toR_pos (by rw [abs_mul, abs_toR, mul_one]; exact D.abs_exp_lt_one ht) (ζ i)
+
+lemma factor_nonneg {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (ζ x : Cube n) :
+    0 ≤ 1 + Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i) :=
+  one_add_mul_toR_nonneg
+    (by rw [abs_mul, abs_toR, mul_one]; exact abs_exp_neg_le_one (D.T_sub_nonneg ht)) (ζ i)
+
+lemma kern_pos {t : ℝ} (ht : t < D.T) (ζ x : Cube n) : 0 < D.kern t ζ x :=
+  Finset.prod_pos fun j _ => by
+    have := D.factor_pos ht j ζ x; linarith
+
+lemma kern_nonneg {t : ℝ} (ht : t ≤ D.T) (ζ x : Cube n) : 0 ≤ D.kern t ζ x :=
+  Finset.prod_nonneg fun j _ => by
+    have := D.factor_nonneg ht j ζ x; linarith
+
+/-- The kernel is a Bayes kernel: `∑_ζ kern·f(ζ) = f_{T-t}`. -/
+lemma sum_kern_mul_f (t : ℝ) (x : Cube n) :
+    ∑ ζ, D.kern t ζ x * D.f ζ = D.fs (D.T - t) x := by
+  simp only [kern, fs, heatAt]
+  exact (smooth_eq_kernel_sum _ _ _).symm
+
+/-- Flipping one coordinate multiplies the kernel by `λ_{t,i}^ζ(x)`. -/
+lemma kern_flipCoord {t : ℝ} (ht : t < D.T) (i : Fin n) (ζ x : Cube n) :
+    D.kern t ζ (flipCoord i x) = D.kern t ζ x * D.lam t i x ζ := by
+  have hne : (1 + Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i)) ≠ 0 :=
+    (D.factor_pos ht i ζ x).ne'
+  have herase : ∏ j ∈ Finset.univ.erase i,
+        (1 + Real.exp (-(D.T - t)) * toR (flipCoord i x j) * toR (ζ j)) / 2
+      = ∏ j ∈ Finset.univ.erase i,
+        (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2 :=
+    Finset.prod_congr rfl fun j hj => by
+      rw [flipCoord_ne (Finset.mem_erase.mp hj).1]
+  simp only [kern]
+  rw [← Finset.mul_prod_erase Finset.univ
+        (fun j => (1 + Real.exp (-(D.T - t)) * toR (flipCoord i x j) * toR (ζ j)) / 2)
+        (Finset.mem_univ i),
+    ← Finset.mul_prod_erase Finset.univ
+        (fun j => (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2)
+        (Finset.mem_univ i),
+    herase, flipCoord_self, toR_neg]
+  simp only [lam]
+  field_simp
+  ring
+
 lemma Hlik_pos {t : ℝ} (ht : t < D.T) (ζ x : Cube n) : 0 < D.Hlik t ζ x := by
-  sorry
+  rw [D.Hlik_eq]
+  exact div_pos (mul_pos (D.kern_pos ht ζ x) (D.hf ζ))
+    (D.fs_pos (D.T_sub_nonneg ht.le) x)
 
 lemma Hlik_nonneg {t : ℝ} (ht : t ≤ D.T) (ζ x : Cube n) : 0 ≤ D.Hlik t ζ x := by
-  sorry
+  rw [D.Hlik_eq]
+  exact div_nonneg (mul_nonneg (D.kern_nonneg ht ζ x) (D.hf ζ).le)
+    (D.fs_pos (D.T_sub_nonneg ht) x).le
 
 /-- `∑_ζ H_t^ζ(x) = 1`. -/
 lemma sum_Hlik {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
     ∑ ζ, D.Hlik t ζ x = 1 := by
-  sorry
+  simp only [D.Hlik_eq]
+  rw [← Finset.sum_div, D.sum_kern_mul_f t x,
+    div_self (D.fs_ne_zero (D.T_sub_nonneg ht) x)]
 
 /-- Ratio identity `H_t^ζ(σ_i x)/H_t^ζ(x)·Y_i(t,x) = λ_{t,i}^ζ(x)`
 [LGF eq (4.5)]. -/
 lemma Hlik_flipCoord_mul_Y {t : ℝ} (ht : t < D.T) (i : Fin n) (ζ x : Cube n) :
     D.Hlik t ζ (flipCoord i x) / D.Hlik t ζ x * D.Y t i x = D.lam t i x ζ := by
-  sorry
+  have hfx := D.fs_ne_zero (D.T_sub_nonneg ht.le) x
+  have hff := D.fs_ne_zero (D.T_sub_nonneg ht.le) (flipCoord i x)
+  have hk := (D.kern_pos ht ζ x).ne'
+  have hfz := (D.hf ζ).ne'
+  rw [D.Hlik_eq, D.Hlik_eq, D.kern_flipCoord ht i ζ x]
+  simp only [Y]
+  field_simp
+
+/-- The two possible values of `λ`, according to the sign of `x_iζ_i`. -/
+lemma lam_cases (t : ℝ) (i : Fin n) (x ζ : Cube n) :
+    D.lam t i x ζ
+        = (1 - Real.exp (-(D.T - t))) / (1 + Real.exp (-(D.T - t)))
+      ∨ D.lam t i x ζ
+        = (1 + Real.exp (-(D.T - t))) / (1 - Real.exp (-(D.T - t))) := by
+  simp only [lam]
+  rcases toR_eq_one_or (x i) with h1 | h1 <;> rcases toR_eq_one_or (ζ i) with h2 | h2 <;>
+      rw [h1, h2]
+  · left; norm_num
+  · right; ring_nf
+  · right; ring_nf
+  · left; ring_nf
+
+/-- `0 < e^{-(T-t)} ≤ a` for `t ≤ T_o`. -/
+lemma exp_le_a {t : ℝ} (ht : t ≤ obsT) : Real.exp (-(D.T - t)) ≤ D.a := by
+  have := D.abs_exp_le_a ht
+  rwa [abs_of_pos (Real.exp_pos _)] at this
 
 /-- `κ_a⁻¹ ≤ λ_{t,i}^ζ(x) ≤ κ_a` for `t ≤ T_o` [LGF eq (4.5)]. -/
 lemma lam_le_kappa {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x ζ : Cube n) :
     D.lam t i x ζ ≤ kappa D.a := by
-  sorry
+  have hρ0 : 0 < Real.exp (-(D.T - t)) := Real.exp_pos _
+  have hρa := D.exp_le_a ht
+  have ha1 := D.ha1
+  rcases D.lam_cases t i x ζ with h | h <;> rw [h, kappa] <;>
+    rw [div_le_div_iff₀ (by linarith) (by linarith)] <;> nlinarith
 
 lemma kappa_inv_le_lam {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x ζ : Cube n) :
     (kappa D.a)⁻¹ ≤ D.lam t i x ζ := by
-  sorry
+  have hρ0 : 0 < Real.exp (-(D.T - t)) := Real.exp_pos _
+  have hρa := D.exp_le_a ht
+  have ha1 := D.ha1
+  have ha0 := D.ha0
+  rw [kappa, inv_div]
+  rcases D.lam_cases t i x ζ with h | h <;> rw [h] <;>
+    rw [div_le_div_iff₀ (by linarith) (by linarith)] <;> nlinarith
 
 lemma lam_pos {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x ζ : Cube n) :
-    0 < D.lam t i x ζ := by
-  sorry
+    0 < D.lam t i x ζ :=
+  lt_of_lt_of_le (inv_pos.mpr D.kappa_pos) (D.kappa_inv_le_lam ht i x ζ)
+
+/-- `d/dt e^{-(T-t)} = e^{-(T-t)}`. -/
+lemma hasDerivAt_rho (t : ℝ) :
+    HasDerivAt (fun t => Real.exp (-(D.T - t))) (Real.exp (-(D.T - t))) t := by
+  have h0 : HasDerivAt (fun u : ℝ => D.T - u) (-1) t := by
+    simpa using (hasDerivAt_const t D.T).sub (hasDerivAt_id t)
+  have h1 := h0.neg
+  rw [neg_neg] at h1
+  simpa using h1.exp
+
+/-- Time derivative of the Bayes kernel: `∂_t kern = kern·∑_j (1-λ_j)/2`. -/
+lemma hasDerivAt_kern {t : ℝ} (ht : t < D.T) (ζ x : Cube n) :
+    HasDerivAt (fun t => D.kern t ζ x)
+      (D.kern t ζ x * ∑ j, (1 - D.lam t j x ζ) / 2) t := by
+  have hfac : ∀ j : Fin n, HasDerivAt
+      (fun t => (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2)
+      (Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j) / 2) t := fun j =>
+    ((((D.hasDerivAt_rho t).mul_const (toR (x j))).mul_const
+      (toR (ζ j))).const_add 1).div_const 2
+  have h := HasDerivAt.fun_finset_prod (u := (Finset.univ : Finset (Fin n)))
+    (f := fun (j : Fin n) (t : ℝ) => (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2)
+    (f' := fun (j : Fin n) => Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j) / 2)
+    (x := t) (fun j _ => hfac j)
+  simp only [kern]
+  convert h using 1
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl fun j _ => ?_
+  have hne : (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) ≠ 0 :=
+    (D.factor_pos ht j ζ x).ne'
+  rw [← Finset.mul_prod_erase Finset.univ
+      (fun k => (1 + Real.exp (-(D.T - t)) * toR (x k) * toR (ζ k)) / 2)
+      (Finset.mem_univ j), smul_eq_mul]
+  simp only [lam]
+  field_simp
+  ring
 
 /-- Space-time harmonicity of the terminal likelihood:
 `∂_t H_t^ζ(x) = -L̃_t(H_t^ζ)(x)` [LGF §4.1 / Lemma 5.1]. -/
 lemma hasDerivAt_Hlik {t : ℝ} (ht : t < D.T) (ζ x : Cube n) :
     HasDerivAt (fun t => D.Hlik t ζ x)
       (-(D.revGen t (fun y => D.Hlik t ζ y) x)) t := by
-  sorry
+  have hfx := D.fs_ne_zero (D.T_sub_nonneg ht.le) x
+  have hnum : HasDerivAt (fun t => D.kern t ζ x * D.f ζ)
+      (D.kern t ζ x * (∑ j, (1 - D.lam t j x ζ) / 2) * D.f ζ) t :=
+    (D.hasDerivAt_kern ht ζ x).mul_const _
+  have hd := hnum.div (D.hasDerivAt_fs_sub t x) hfx
+  have hrev : D.revGen t (fun y => D.Hlik t ζ y) x
+      = D.Hlik t ζ x * ∑ i, (D.lam t i x ζ - D.Y t i x) / 2 := by
+    simp only [revGen, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    have hff := D.fs_ne_zero (D.T_sub_nonneg ht.le) (flipCoord i x)
+    simp only [D.Hlik_eq, D.kern_flipCoord ht i ζ x, Y]
+    field_simp
+  have hzero : (∑ j, (1 - D.lam t j x ζ) / 2) + (∑ i, (D.Y t i x - 1) / 2)
+      + ∑ i, (D.lam t i x ζ - D.Y t i x) / 2 = 0 := by
+    rw [← Finset.sum_add_distrib, ← Finset.sum_add_distrib]
+    refine Finset.sum_eq_zero fun i _ => ?_
+    ring
+  have hC : (∑ i, (D.lam t i x ζ - D.Y t i x) / 2)
+      = -((∑ j, (1 - D.lam t j x ζ) / 2) + (∑ i, (D.Y t i x - 1) / 2)) := by linarith
+  rw [hrev]
+  simp only [D.Hlik_eq]
+  convert hd using 1
+  rw [hC, D.cubeLap_fs_eq ht.le x]
+  field_simp
+  ring
 
 end Dat
 
