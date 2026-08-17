@@ -279,6 +279,98 @@ private lemma jrate_apply (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
           else 0)) := by
   obtain ⟨x', y', b'⟩ := τ; rfl
 
+open Classical in
+/-- Alive-sector jump pairing, expanded coordinate by coordinate. -/
+private lemma jrate_pair_true (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
+    (x y : Cube n) (f : JSt n → ℝ) :
+    ∑ τ : JSt n, D.jrate dd B t (x, y, true) τ * f τ
+      = ∑ i : Fin n,
+        ((if D.Y t i x < 1 then D.Y t i x / 2 else D.Y t i x ^ (1 - dd) / 2)
+            * f (flipCoord i x, flipCoord i y, decide (flipCoord i x ∉ B))
+        + (if D.Y t i x < 1 then (1 - D.Y t i x ^ dd) / 2 else 0)
+            * f (x, flipCoord i y, true)
+        + (if D.Y t i x < 1 then 0 else (D.Y t i x - D.Y t i x ^ (1 - dd)) / 2)
+            * f (flipCoord i x, y, decide (flipCoord i x ∉ B))) := by
+  simp_rw [D.jrate_apply dd B t x y true, Finset.sum_mul]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  simp_rw [add_mul]
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib]
+  refine congrArg₂ (· + ·) (congrArg₂ (· + ·) ?_ ?_) ?_
+  · refine sum_state_eq
+      (P := fun τ : JSt n => τ.1 = flipCoord i x ∧ τ.2.1 = flipCoord i y ∧
+        (τ.2.2 = (true && decide (τ.1 ∉ B))))
+      (τ₀ := (flipCoord i x, flipCoord i y, decide (flipCoord i x ∉ B))) ?_ _ _
+    intro τ
+    constructor
+    · rintro ⟨h1, h2, h3⟩
+      rw [h1, Bool.true_and] at h3
+      exact Prod.ext_iff.mpr ⟨h1, Prod.ext_iff.mpr ⟨h2, h3⟩⟩
+    · rintro rfl; exact ⟨rfl, rfl, by simp⟩
+  · by_cases hY : D.Y t i x < 1
+    · rw [if_pos hY]
+      refine sum_state_eq
+        (P := fun τ : JSt n => True ∧ τ.2.2 = true ∧ τ.1 = x ∧
+          τ.2.1 = flipCoord i y ∧ D.Y t i x < 1)
+        (τ₀ := (x, flipCoord i y, true)) ?_ _ _
+      intro τ
+      constructor
+      · rintro ⟨-, h2, h3, h4, -⟩
+        exact Prod.ext_iff.mpr ⟨h3, Prod.ext_iff.mpr ⟨h4, h2⟩⟩
+      · rintro rfl; exact ⟨trivial, rfl, rfl, rfl, hY⟩
+    · rw [if_neg hY, zero_mul]
+      refine Finset.sum_eq_zero fun τ _ => ?_
+      rw [if_neg (fun hc => hY hc.2.2.2.2), zero_mul]
+  · by_cases hY : D.Y t i x < 1
+    · rw [if_pos hY, zero_mul]
+      refine Finset.sum_eq_zero fun τ _ => ?_
+      rw [if_neg (fun hc => hc.2.2.2.1 hY), zero_mul]
+    · rw [if_neg hY]
+      refine sum_state_eq
+        (P := fun τ : JSt n => True ∧ τ.2.1 = y ∧ τ.1 = flipCoord i x ∧
+          ¬(D.Y t i x < 1) ∧ (τ.2.2 = decide (τ.1 ∉ B)))
+        (τ₀ := (flipCoord i x, y, decide (flipCoord i x ∉ B))) ?_ _ _
+      intro τ
+      constructor
+      · rintro ⟨-, h2, h3, -, h5⟩
+        rw [h3] at h5
+        exact Prod.ext_iff.mpr ⟨h3, Prod.ext_iff.mpr ⟨h2, h5⟩⟩
+      · rintro rfl; exact ⟨trivial, rfl, rfl, hY, rfl⟩
+
+open Classical in
+/-- Dead-sector jump pairing: synchronized flips only. -/
+private lemma jrate_pair_false (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
+    (x y : Cube n) (f : JSt n → ℝ) :
+    ∑ τ : JSt n, D.jrate dd B t (x, y, false) τ * f τ
+      = ∑ i : Fin n, D.Y t i x / 2 * f (flipCoord i x, flipCoord i y, false) := by
+  simp_rw [D.jrate_apply dd B t x y false, Finset.sum_mul]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  simp_rw [add_mul]
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib]
+  have h2 : ∑ τ : JSt n,
+      (if (false : Bool) ∧ τ.2.2 = true ∧ τ.1 = x ∧ τ.2.1 = flipCoord i y ∧
+          D.Y t i x < 1 then (1 - D.Y t i x ^ dd) / 2 else 0) * f τ = 0 := by
+    refine Finset.sum_eq_zero fun τ _ => ?_
+    rw [if_neg (by rintro ⟨h, -⟩; exact Bool.noConfusion h), zero_mul]
+  have h3 : ∑ τ : JSt n,
+      (if (false : Bool) ∧ τ.2.1 = y ∧ τ.1 = flipCoord i x ∧ ¬(D.Y t i x < 1) ∧
+          (τ.2.2 = decide (τ.1 ∉ B)) then
+        (D.Y t i x - D.Y t i x ^ (1 - dd)) / 2 else 0) * f τ = 0 := by
+    refine Finset.sum_eq_zero fun τ _ => ?_
+    rw [if_neg (by rintro ⟨h, -⟩; exact Bool.noConfusion h), zero_mul]
+  rw [h2, h3, add_zero, add_zero]
+  refine sum_state_eq
+    (P := fun τ : JSt n => τ.1 = flipCoord i x ∧ τ.2.1 = flipCoord i y ∧
+      (τ.2.2 = ((false : Bool) && decide (τ.1 ∉ B))))
+    (τ₀ := (flipCoord i x, flipCoord i y, false)) ?_ _ _
+  intro τ
+  constructor
+  · rintro ⟨h1, h2, h3⟩
+    rw [Bool.false_and] at h3
+    exact Prod.ext_iff.mpr ⟨h1, Prod.ext_iff.mpr ⟨h2, h3⟩⟩
+  · rintro rfl; exact ⟨rfl, rfl, by simp⟩
+
 /-- **Weighted terminal comparison** [LGF Prop 4.1, `N`-weighted form]:
 for every nonnegative terminal test `h` and every starting point,
 `𝔼_{x₀}[N_{T_o}·h(W_{T_o})] ≤ 𝔼_{x₀}[h(V_{T_o})]`. -/
