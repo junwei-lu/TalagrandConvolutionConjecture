@@ -289,6 +289,187 @@ lemma profile_le_ent' (hf : ∀ x, 0 < f x) (hm : unifE f = 1) {s : ℝ}
   abstract_profile_le_ent (fun x => heatAt_pos hf hs x)
     (by rw [unifE_heatAt, hm]) hℓ
 
+/-! ### The level flux as an indicator sum
+
+`levelFlux` is defined with a classical `if`; the following instance-free
+`Set.indicator` form is what all the analytic arguments use. -/
+
+/-- The `(x,i)`-summand of `4·levelFlux f s u`, written as an indicator. -/
+private noncomputable def fluxTerm (f : Cube n → ℝ) (s u : ℝ) (x : Cube n)
+    (i : Fin n) : ℝ :=
+  (Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x))).indicator
+    (fun _ => |heatAt f s (flipCoord i x) - heatAt f s x|) (Real.exp u)
+
+private lemma fluxTerm_nonneg (f : Cube n → ℝ) (s u : ℝ) (x : Cube n) (i : Fin n) :
+    0 ≤ fluxTerm f s u x i :=
+  Set.indicator_nonneg (fun _ _ => abs_nonneg _) _
+
+private lemma levelFlux_eq_fluxTerm (f : Cube n → ℝ) (s u : ℝ) :
+    levelFlux f s u = unifE (fun x => ∑ i, fluxTerm f s u x i) / 4 := by
+  rw [levelFlux]
+  congr 1
+
+lemma levelFlux_nonneg (f : Cube n → ℝ) (s u : ℝ) : 0 ≤ levelFlux f s u := by
+  rw [levelFlux_eq_fluxTerm]
+  exact div_nonneg
+    (unifE_nonneg fun x => Finset.sum_nonneg fun i _ => fluxTerm_nonneg _ _ _ _ _)
+    (by norm_num)
+
+private lemma intervalIntegrable_fluxTerm (f : Cube n → ℝ) (s : ℝ) (x : Cube n)
+    (i : Fin n) (a b : ℝ) :
+    IntervalIntegrable (fun u => fluxTerm f s u x i) volume a b := by
+  have hT : MeasurableSet (Real.exp ⁻¹'
+      Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x))) :=
+    Real.measurable_exp measurableSet_uIoc
+  have heq : (fun u => fluxTerm f s u x i)
+      = (Real.exp ⁻¹' Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x))).indicator
+          (fun _ => |heatAt f s (flipCoord i x) - heatAt f s x|) := by
+    funext u
+    rw [fluxTerm]
+    by_cases h : Real.exp u ∈ Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x))
+    · rw [Set.indicator_of_mem h,
+        Set.indicator_of_mem (show u ∈ Real.exp ⁻¹'
+          Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x)) from h)]
+    · rw [Set.indicator_of_notMem h,
+        Set.indicator_of_notMem (show u ∉ Real.exp ⁻¹'
+          Set.uIoc (heatAt f s x) (heatAt f s (flipCoord i x)) from h)]
+  rw [heq, intervalIntegrable_iff]
+  exact (intervalIntegrable_iff.1
+    ((continuous_const :
+      Continuous fun _ : ℝ => |heatAt f s (flipCoord i x) - heatAt f s x|).intervalIntegrable
+        a b)).indicator hT
+
+private lemma intervalIntegrable_sum_fluxTerm (f : Cube n → ℝ) (s : ℝ) (x : Cube n)
+    (a b : ℝ) : IntervalIntegrable (fun u => ∑ i, fluxTerm f s u x i) volume a b := by
+  have h := IntervalIntegrable.sum (Finset.univ : Finset (Fin n))
+    (fun i (_ : i ∈ (Finset.univ : Finset (Fin n))) =>
+      intervalIntegrable_fluxTerm f s x i a b)
+  have heq : (∑ i ∈ (Finset.univ : Finset (Fin n)), fun u : ℝ => fluxTerm f s u x i)
+      = fun u => ∑ i, fluxTerm f s u x i := by
+    funext u; simp
+  rwa [heq] at h
+
+private lemma integral_unifE_sum_fluxTerm (f : Cube n → ℝ) (s a b : ℝ) :
+    ∫ u in a..b, unifE (fun x => ∑ i, fluxTerm f s u x i)
+      = unifE (fun x => ∑ i, ∫ u in a..b, fluxTerm f s u x i) := by
+  simp only [unifE]
+  rw [intervalIntegral.integral_div]
+  congr 1
+  have h1 : ∫ u in a..b, ∑ x : Cube n, ∑ i, fluxTerm f s u x i
+      = ∑ x : Cube n, ∫ u in a..b, ∑ i, fluxTerm f s u x i :=
+    intervalIntegral.integral_finset_sum fun x _ =>
+      intervalIntegrable_sum_fluxTerm f s x a b
+  rw [h1]
+  refine Finset.sum_congr rfl fun x _ => ?_
+  exact intervalIntegral.integral_finset_sum fun i _ =>
+    intervalIntegrable_fluxTerm f s x i a b
+
+/-! ### The pointwise coarea estimate -/
+
+private lemma exp_mem_uIoc_iff (a b u : ℝ) :
+    Real.exp u ∈ Set.uIoc (Real.exp a) (Real.exp b) ↔ u ∈ Set.uIoc a b := by
+  simp only [Set.mem_uIoc, Real.exp_lt_exp, Real.exp_le_exp]
+
+private lemma sqrt_localizedTest {f : Cube n → ℝ} {s : ℝ}
+    (hFpos : ∀ y, 0 < heatAt f s y) (ℓ : ℝ) (y : Cube n) :
+    Real.sqrt (localizedTest f s ℓ y) = sqrtTest ℓ (Real.log (heatAt f s y)) := by
+  have hc := cutoff_mem_Icc (Real.log (heatAt f s y) - ℓ)
+  have hsq : Real.sqrt (heatAt f s y) = Real.exp (Real.log (heatAt f s y) / 2) := by
+    have h : (Real.exp (Real.log (heatAt f s y) / 2)) ^ 2 = heatAt f s y := by
+      rw [sq, ← Real.exp_add,
+        show Real.log (heatAt f s y) / 2 + Real.log (heatAt f s y) / 2
+          = Real.log (heatAt f s y) by ring]
+      exact Real.exp_log (hFpos y)
+    have h2 : Real.sqrt ((Real.exp (Real.log (heatAt f s y) / 2)) ^ 2)
+        = Real.exp (Real.log (heatAt f s y) / 2) := Real.sqrt_sq (Real.exp_nonneg _)
+    rwa [h] at h2
+  simp only [localizedTest, sqrtTest]
+  rw [Real.sqrt_mul (hFpos y).le, Real.sqrt_sq hc.1, hsq]
+
+private lemma sqrtTest_sq_diff_le_integral (ℓ a b : ℝ) :
+    (sqrtTest ℓ b - sqrtTest ℓ a) ^ 2
+      ≤ 16 * ∫ u in ℓ - 1..ℓ + 2,
+          (Set.uIoc (Real.exp a) (Real.exp b)).indicator
+            (fun _ => |Real.exp b - Real.exp a|) (Real.exp u) := by
+  have hle : ℓ - 1 ≤ ℓ + 2 := by linarith
+  have hcongr : ∀ u ∈ Set.uIcc (ℓ - 1) (ℓ + 2),
+      (Set.uIoc (Real.exp a) (Real.exp b)).indicator
+        (fun _ => |Real.exp b - Real.exp a|) (Real.exp u)
+      = (Set.uIoc a b).indicator (fun _ => |Real.exp b - Real.exp a|) u := by
+    intro u _
+    by_cases h : u ∈ Set.uIoc a b
+    · rw [Set.indicator_of_mem ((exp_mem_uIoc_iff a b u).2 h), Set.indicator_of_mem h]
+    · rw [Set.indicator_of_notMem (fun hh => h ((exp_mem_uIoc_iff a b u).1 hh)),
+        Set.indicator_of_notMem h]
+  have hval : ∫ u in ℓ - 1..ℓ + 2,
+      (Set.uIoc a b).indicator (fun _ => |Real.exp b - Real.exp a|) u
+      = (volume (Set.Ioc (ℓ - 1) (ℓ + 2) ∩ Set.uIoc a b)).toReal
+          * |Real.exp b - Real.exp a| := by
+    rw [intervalIntegral.integral_of_le hle,
+      MeasureTheory.setIntegral_indicator measurableSet_uIoc,
+      MeasureTheory.setIntegral_const, smul_eq_mul]
+    rfl
+  have hmono : (volume (Set.uIoc a b ∩ Set.Ioo (ℓ - 1) (ℓ + 2))).toReal
+      ≤ (volume (Set.Ioc (ℓ - 1) (ℓ + 2) ∩ Set.uIoc a b)).toReal := by
+    refine ENNReal.toReal_mono ?_ (measure_mono ?_)
+    · exact ne_of_lt (lt_of_le_of_lt (measure_mono Set.inter_subset_left)
+        measure_Ioc_lt_top)
+    · intro y hy
+      exact ⟨Set.Ioo_subset_Ioc_self hy.2, hy.1⟩
+  have h0 := sqrtTest_sq_diff_le ℓ a b
+  rw [intervalIntegral.integral_congr hcongr, hval]
+  nlinarith [abs_nonneg (Real.exp b - Real.exp a), h0, hmono]
+
+/-- Coarea comparison [C eq (claim_dirichlet_comparison)] with our constants
+(correct form of `dirichlet_le_flux_integral`, with the missing hypothesis
+`0 ≤ s`): `𝔼_λ ∑_i (Δ_i √h_s)² ≤ 256·∫_{ℓ-1}^{ℓ+2} levelFlux f s u du`. -/
+lemma dirichlet_le_flux_integral' (hf : ∀ x, 0 < f x) {s : ℝ} (hs : 0 ≤ s) (ℓ : ℝ) :
+    unifE (fun x => ∑ i,
+        (Real.sqrt (localizedTest f s ℓ (flipCoord i x))
+          - Real.sqrt (localizedTest f s ℓ x)) ^ 2)
+      ≤ 256 * ∫ u in ℓ - 1..ℓ + 2, levelFlux f s u := by
+  have hFpos : ∀ y, 0 < heatAt f s y := fun y => heatAt_pos hf hs y
+  have hle : ℓ - 1 ≤ ℓ + 2 := by linarith
+  have hpt : ∀ (x : Cube n) (i : Fin n),
+      (Real.sqrt (localizedTest f s ℓ (flipCoord i x))
+        - Real.sqrt (localizedTest f s ℓ x)) ^ 2
+        ≤ 16 * ∫ u in ℓ - 1..ℓ + 2, fluxTerm f s u x i := by
+    intro x i
+    rw [sqrt_localizedTest hFpos ℓ (flipCoord i x), sqrt_localizedTest hFpos ℓ x]
+    have h := sqrtTest_sq_diff_le_integral ℓ (Real.log (heatAt f s x))
+      (Real.log (heatAt f s (flipCoord i x)))
+    rwa [Real.exp_log (hFpos x), Real.exp_log (hFpos (flipCoord i x))] at h
+  set X : ℝ := ∫ u in ℓ - 1..ℓ + 2, unifE (fun x => ∑ i, fluxTerm f s u x i) with hXdef
+  have hX0 : 0 ≤ X := by
+    rw [hXdef]
+    refine intervalIntegral.integral_nonneg hle fun u _ => ?_
+    exact unifE_nonneg fun x => Finset.sum_nonneg fun i _ => fluxTerm_nonneg _ _ _ _ _
+  have hlf : ∫ u in ℓ - 1..ℓ + 2, levelFlux f s u = X / 4 := by
+    rw [hXdef, ← intervalIntegral.integral_div]
+    exact intervalIntegral.integral_congr fun u _ => levelFlux_eq_fluxTerm f s u
+  have hchain : unifE (fun x => ∑ i,
+      (Real.sqrt (localizedTest f s ℓ (flipCoord i x))
+        - Real.sqrt (localizedTest f s ℓ x)) ^ 2) ≤ 16 * X := by
+    calc unifE (fun x => ∑ i,
+        (Real.sqrt (localizedTest f s ℓ (flipCoord i x))
+          - Real.sqrt (localizedTest f s ℓ x)) ^ 2)
+        ≤ unifE (fun x => ∑ i, 16 * ∫ u in ℓ - 1..ℓ + 2, fluxTerm f s u x i) :=
+          unifE_mono fun x => Finset.sum_le_sum fun i _ => hpt x i
+      _ = 16 * unifE (fun x => ∑ i, ∫ u in ℓ - 1..ℓ + 2, fluxTerm f s u x i) := by
+          rw [← unifE_smul]
+          exact congrArg unifE (funext fun x => (Finset.mul_sum _ _ _).symm)
+      _ = 16 * X := by rw [hXdef, integral_unifE_sum_fluxTerm]
+  rw [hlf]
+  linarith
+
+-- STATEMENT-ISSUE: `dirichlet_le_flux_integral` lacks the hypothesis
+-- `0 ≤ s`.  The coarea argument of [C, proof of Lemma 4] rewrites
+-- `√(h_s) = ψ_ℓ(log f_s)`, which requires `f_s > 0`; for `s < 0` the flow
+-- `heatAt f s` takes negative values (see the witness recorded above
+-- `profile_nonneg`) and `√(h_s)` is no longer of this form, so the proof
+-- breaks down.  We have not determined whether the inequality happens to
+-- remain true for `s < 0`.  The intended statement (with `0 ≤ s`) is
+-- `dirichlet_le_flux_integral'` above, which is proved.
 /-- Coarea comparison [C eq (claim_dirichlet_comparison)] with our constants:
 `𝔼_λ ∑_i (Δ_i √h_s)² ≤ 256·∫_{ℓ-1}^{ℓ+2} levelFlux f s u du`. -/
 lemma dirichlet_le_flux_integral (hf : ∀ x, 0 < f x) (s ℓ : ℝ) :
