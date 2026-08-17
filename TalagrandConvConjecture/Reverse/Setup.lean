@@ -358,35 +358,133 @@ noncomputable def lam (t : ℝ) (i : Fin n) (x ζ : Cube n) : ℝ :=
   (1 - Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i))
     / (1 + Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i))
 
+/-- The Bayes kernel `∏_j (1 + ρ_t x_jζ_j)/2` appearing in `H_t^ζ`. -/
+noncomputable def kern (t : ℝ) (ζ x : Cube n) : ℝ :=
+  ∏ j, (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2
+
+lemma Hlik_eq (t : ℝ) (ζ x : Cube n) :
+    D.Hlik t ζ x = D.kern t ζ x * D.f ζ / D.fs (D.T - t) x := rfl
+
+lemma abs_exp_lt_one {t : ℝ} (ht : t < D.T) : |Real.exp (-(D.T - t))| < 1 := by
+  rw [abs_of_pos (Real.exp_pos _)]
+  simpa using Real.exp_lt_exp.mpr (show -(D.T - t) < 0 by linarith)
+
+lemma factor_pos {t : ℝ} (ht : t < D.T) (i : Fin n) (ζ x : Cube n) :
+    0 < 1 + Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i) :=
+  one_add_mul_toR_pos (by rw [abs_mul, abs_toR, mul_one]; exact D.abs_exp_lt_one ht) (ζ i)
+
+lemma factor_nonneg {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (ζ x : Cube n) :
+    0 ≤ 1 + Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i) :=
+  one_add_mul_toR_nonneg
+    (by rw [abs_mul, abs_toR, mul_one]; exact abs_exp_neg_le_one (D.T_sub_nonneg ht)) (ζ i)
+
+lemma kern_pos {t : ℝ} (ht : t < D.T) (ζ x : Cube n) : 0 < D.kern t ζ x :=
+  Finset.prod_pos fun j _ => by
+    have := D.factor_pos ht j ζ x; linarith
+
+lemma kern_nonneg {t : ℝ} (ht : t ≤ D.T) (ζ x : Cube n) : 0 ≤ D.kern t ζ x :=
+  Finset.prod_nonneg fun j _ => by
+    have := D.factor_nonneg ht j ζ x; linarith
+
+/-- The kernel is a Bayes kernel: `∑_ζ kern·f(ζ) = f_{T-t}`. -/
+lemma sum_kern_mul_f (t : ℝ) (x : Cube n) :
+    ∑ ζ, D.kern t ζ x * D.f ζ = D.fs (D.T - t) x := by
+  simp only [kern, fs, heatAt]
+  exact (smooth_eq_kernel_sum _ _ _).symm
+
+/-- Flipping one coordinate multiplies the kernel by `λ_{t,i}^ζ(x)`. -/
+lemma kern_flipCoord {t : ℝ} (ht : t < D.T) (i : Fin n) (ζ x : Cube n) :
+    D.kern t ζ (flipCoord i x) = D.kern t ζ x * D.lam t i x ζ := by
+  have hne : (1 + Real.exp (-(D.T - t)) * toR (x i) * toR (ζ i)) ≠ 0 :=
+    (D.factor_pos ht i ζ x).ne'
+  have herase : ∏ j ∈ Finset.univ.erase i,
+        (1 + Real.exp (-(D.T - t)) * toR (flipCoord i x j) * toR (ζ j)) / 2
+      = ∏ j ∈ Finset.univ.erase i,
+        (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2 :=
+    Finset.prod_congr rfl fun j hj => by
+      rw [flipCoord_ne (Finset.mem_erase.mp hj).1]
+  simp only [kern]
+  rw [← Finset.mul_prod_erase Finset.univ
+        (fun j => (1 + Real.exp (-(D.T - t)) * toR (flipCoord i x j) * toR (ζ j)) / 2)
+        (Finset.mem_univ i),
+    ← Finset.mul_prod_erase Finset.univ
+        (fun j => (1 + Real.exp (-(D.T - t)) * toR (x j) * toR (ζ j)) / 2)
+        (Finset.mem_univ i),
+    herase, flipCoord_self, toR_neg]
+  simp only [lam]
+  field_simp
+  ring
+
 lemma Hlik_pos {t : ℝ} (ht : t < D.T) (ζ x : Cube n) : 0 < D.Hlik t ζ x := by
-  sorry
+  rw [D.Hlik_eq]
+  exact div_pos (mul_pos (D.kern_pos ht ζ x) (D.hf ζ))
+    (D.fs_pos (D.T_sub_nonneg ht.le) x)
 
 lemma Hlik_nonneg {t : ℝ} (ht : t ≤ D.T) (ζ x : Cube n) : 0 ≤ D.Hlik t ζ x := by
-  sorry
+  rw [D.Hlik_eq]
+  exact div_nonneg (mul_nonneg (D.kern_nonneg ht ζ x) (D.hf ζ).le)
+    (D.fs_pos (D.T_sub_nonneg ht) x).le
 
 /-- `∑_ζ H_t^ζ(x) = 1`. -/
 lemma sum_Hlik {t : ℝ} (ht : t ≤ D.T) (x : Cube n) :
     ∑ ζ, D.Hlik t ζ x = 1 := by
-  sorry
+  simp only [D.Hlik_eq]
+  rw [← Finset.sum_div, D.sum_kern_mul_f t x,
+    div_self (D.fs_ne_zero (D.T_sub_nonneg ht) x)]
 
 /-- Ratio identity `H_t^ζ(σ_i x)/H_t^ζ(x)·Y_i(t,x) = λ_{t,i}^ζ(x)`
 [LGF eq (4.5)]. -/
 lemma Hlik_flipCoord_mul_Y {t : ℝ} (ht : t < D.T) (i : Fin n) (ζ x : Cube n) :
     D.Hlik t ζ (flipCoord i x) / D.Hlik t ζ x * D.Y t i x = D.lam t i x ζ := by
-  sorry
+  have hfx := D.fs_ne_zero (D.T_sub_nonneg ht.le) x
+  have hff := D.fs_ne_zero (D.T_sub_nonneg ht.le) (flipCoord i x)
+  have hk := (D.kern_pos ht ζ x).ne'
+  have hfz := (D.hf ζ).ne'
+  rw [D.Hlik_eq, D.Hlik_eq, D.kern_flipCoord ht i ζ x]
+  simp only [Y]
+  field_simp
+
+/-- The two possible values of `λ`, according to the sign of `x_iζ_i`. -/
+lemma lam_cases (t : ℝ) (i : Fin n) (x ζ : Cube n) :
+    D.lam t i x ζ
+        = (1 - Real.exp (-(D.T - t))) / (1 + Real.exp (-(D.T - t)))
+      ∨ D.lam t i x ζ
+        = (1 + Real.exp (-(D.T - t))) / (1 - Real.exp (-(D.T - t))) := by
+  simp only [lam]
+  rcases toR_eq_one_or (x i) with h1 | h1 <;> rcases toR_eq_one_or (ζ i) with h2 | h2 <;>
+      rw [h1, h2]
+  · left; norm_num
+  · right; ring_nf
+  · right; ring_nf
+  · left; ring_nf
+
+/-- `0 < e^{-(T-t)} ≤ a` for `t ≤ T_o`. -/
+lemma exp_le_a {t : ℝ} (ht : t ≤ obsT) : Real.exp (-(D.T - t)) ≤ D.a := by
+  have := D.abs_exp_le_a ht
+  rwa [abs_of_pos (Real.exp_pos _)] at this
 
 /-- `κ_a⁻¹ ≤ λ_{t,i}^ζ(x) ≤ κ_a` for `t ≤ T_o` [LGF eq (4.5)]. -/
 lemma lam_le_kappa {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x ζ : Cube n) :
     D.lam t i x ζ ≤ kappa D.a := by
-  sorry
+  have hρ0 : 0 < Real.exp (-(D.T - t)) := Real.exp_pos _
+  have hρa := D.exp_le_a ht
+  have ha1 := D.ha1
+  rcases D.lam_cases t i x ζ with h | h <;> rw [h, kappa] <;>
+    rw [div_le_div_iff₀ (by linarith) (by linarith)] <;> nlinarith
 
 lemma kappa_inv_le_lam {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x ζ : Cube n) :
     (kappa D.a)⁻¹ ≤ D.lam t i x ζ := by
-  sorry
+  have hρ0 : 0 < Real.exp (-(D.T - t)) := Real.exp_pos _
+  have hρa := D.exp_le_a ht
+  have ha1 := D.ha1
+  have ha0 := D.ha0
+  rw [kappa, inv_div]
+  rcases D.lam_cases t i x ζ with h | h <;> rw [h] <;>
+    rw [div_le_div_iff₀ (by linarith) (by linarith)] <;> nlinarith
 
 lemma lam_pos {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x ζ : Cube n) :
-    0 < D.lam t i x ζ := by
-  sorry
+    0 < D.lam t i x ζ :=
+  lt_of_lt_of_le (inv_pos.mpr D.kappa_pos) (D.kappa_inv_le_lam ht i x ζ)
 
 /-- Space-time harmonicity of the terminal likelihood:
 `∂_t H_t^ζ(x) = -L̃_t(H_t^ζ)(x)` [LGF §4.1 / Lemma 5.1]. -/
