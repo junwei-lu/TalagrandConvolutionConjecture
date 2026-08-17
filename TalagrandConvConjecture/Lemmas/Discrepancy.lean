@@ -2607,6 +2607,7 @@ private lemma apE_le (B : Finset (Cube n)) {ℓ θ : ℝ}
           + 2 * ∫ t in c.z k..c.z (k + 1), D.apPair φ c k t := fun k hk =>
       hsplitint k (Finset.mem_range.mp hk)
     rw [Finset.sum_congr rfl hre, Finset.sum_add_distrib, ← Finset.mul_sum]
+    simp only [apE]
     ring
   -- endpoint bounds
   have hend : D.qPair φ c (c.K - 1) (c.z c.K) ≤ 1 := by
@@ -3078,9 +3079,9 @@ theorem DA_le :
         ≤ Real.sqrt ((Real.sqrt a + Real.sqrt b) ^ 2) := Real.sqrt_le_sqrt h
       _ = Real.sqrt a + Real.sqrt b := Real.sqrt_sq (by positivity)
   have hterm1 : Cst * Real.sqrt (2 * κ) = 4 * κ * Λ := by
-    rw [hCst]
     have h2κ : Real.sqrt (2 * κ) = Real.sqrt 2 * Real.sqrt κ :=
       Real.sqrt_mul (by norm_num) _
+    rw [hCst, h2κ]
     have h82 : Real.sqrt 8 * Real.sqrt 2 = 4 := by
       rw [← Real.sqrt_mul (by norm_num : (0:ℝ) ≤ 8)]
       rw [show (8 : ℝ) * 2 = 4 ^ 2 by norm_num]
