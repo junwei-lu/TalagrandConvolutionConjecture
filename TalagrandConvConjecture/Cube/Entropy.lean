@@ -275,9 +275,7 @@ private lemma ent2_avg_le {a b c d : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 
     rw [Fin.sum_univ_two]; norm_num
   have hnn : ∀ (k i : Fin 2), 0 ≤ (![![a,b],![c,d]] : Fin 2 → Fin 2 → ℝ) k i := by
     intro k i
-    fin_cases k <;> fin_cases i <;>
-      simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.head_cons,
-        Matrix.head_fin_const, Matrix.cons_val_fin_one] <;> assumption
+    fin_cases k <;> fin_cases i <;> assumption
   have key : ent (fun _ : Fin 2 => (1:ℝ)/2)
         (fun i => ∑ k, (1:ℝ)/2 * (![![a,b],![c,d]] : Fin 2 → Fin 2 → ℝ) k i)
       ≤ ∑ k, (1:ℝ)/2 * ent (fun _ : Fin 2 => (1:ℝ)/2)
@@ -287,17 +285,17 @@ private lemma ent2_avg_le {a b c d : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 
   have e0 : ∑ k, (1:ℝ)/2 * (![![a,b],![c,d]] : Fin 2 → Fin 2 → ℝ) k 0
       = (a + c) / 2 := by
     rw [Fin.sum_univ_two]
-    simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.head_cons]
+    simp only [Matrix.cons_val_zero, Matrix.cons_val_one]
     ring
   have e1 : ∑ k, (1:ℝ)/2 * (![![a,b],![c,d]] : Fin 2 → Fin 2 → ℝ) k 1
       = (b + d) / 2 := by
     rw [Fin.sum_univ_two]
-    simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.head_cons]
+    simp only [Matrix.cons_val_zero, Matrix.cons_val_one]
     ring
   rw [e0, e1] at key
   refine key.trans (le_of_eq ?_)
   rw [Fin.sum_univ_two, ent_fin2, ent_fin2]
-  simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.head_cons]
+  simp only [Matrix.cons_val_zero, Matrix.cons_val_one]
   ring
 
 /-! ### Splitting the cube along the first coordinate -/
