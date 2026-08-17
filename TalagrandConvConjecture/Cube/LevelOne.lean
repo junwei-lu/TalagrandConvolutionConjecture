@@ -59,11 +59,8 @@ private lemma sum_units_kernel_centered_sq (c : ℝ) :
 
 /-! ### Product structure of the biased measure -/
 
-/-- Expectations of products of single-coordinate functions factorize. -/
-private lemma sum_cube_prod (f : Fin n → ℤˣ → ℝ) :
-    ∑ y : Cube n, ∏ i, f i (y i) = ∏ i, ∑ ε : ℤˣ, f i ε := by
-  classical
-  rw [Finset.prod_univ_sum, Fintype.piFinset_univ]
+-- (product-of-sums factorization `sum_cube_prod` is provided by
+-- `Cube/Multilinear.lean`)
 
 /-- Splitting the product kernel off the `i`-th coordinate. -/
 private lemma cubeKernel_erase (z : Fin n → ℝ) (y : Cube n) (i : Fin n) :

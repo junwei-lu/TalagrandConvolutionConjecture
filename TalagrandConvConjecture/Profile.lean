@@ -559,7 +559,8 @@ private lemma finite_crossing (f : Cube n → ℝ) (hm : unifE f = 1) {u : ℝ}
     · rintro ⟨x, hx⟩; exact ⟨x, by rw [← hcrep x s]; exact hx⟩
     · rintro ⟨x, hx⟩; exact ⟨x, by rw [hcrep x s]; exact hx⟩
   rw [hset]
-  exact finite_setOf_expPoly_family_eq c (fun _ => Real.exp u) hv
+  exact finite_setOf_expPoly_family_eq_of_pos (Nat.succ_pos n) c
+    (fun _ => Real.exp u) hv
 
 /-! ### The derivative of the level excess off crossing times -/
 
