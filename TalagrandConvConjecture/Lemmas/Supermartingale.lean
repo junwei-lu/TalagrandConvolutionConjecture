@@ -27,6 +27,31 @@ ratio `e^{δ̄(ℓ+1-F)} ≤ 1` on transferred states, `H ≥ 0`).
 
 namespace Talagrand
 
+/-! ### Generic finite-sum helpers -/
+
+/-- A rate `if`-term with a uniquely determined target collapses. -/
+private lemma sum_state_eq {n : ℕ} {P : JSt n → Prop} [DecidablePred P] {τ₀ : JSt n}
+    (hP : ∀ τ, P τ ↔ τ = τ₀) (r : ℝ) (f : JSt n → ℝ) :
+    ∑ τ : JSt n, (if P τ then r else 0) * f τ = r * f τ₀ := by
+  classical
+  have key : ∀ τ : JSt n, (if P τ then r else 0) * f τ = if τ = τ₀ then r * f τ₀ else 0 := by
+    intro τ
+    by_cases hτ : τ = τ₀
+    · rw [if_pos hτ, if_pos ((hP τ).mpr hτ), hτ]
+    · rw [if_neg hτ, if_neg (fun hc => hτ ((hP τ).mp hc)), zero_mul]
+  simp [key]
+
+/-- Transposed action of a forward matrix against a test function is the
+backward generator of the rate table. -/
+private lemma fwdOf_transpose_pair {S : Type*} [Fintype S] [DecidableEq S]
+    (q : S → S → ℝ) (g : S → ℝ) (σ : S) :
+    ∑ s, fwdOf q s σ * g s = ∑ s, q σ s * (g s - g σ) := by
+  classical
+  have h2 : ∑ s, (if s = σ then ∑ s'', q s s'' else 0) * g s = (∑ s'', q σ s'') * g σ := by
+    simp
+  simp only [fwdOf, sub_mul, Finset.sum_sub_distrib, h2, mul_sub]
+  rw [← Finset.sum_mul]
+
 namespace Dat
 
 variable {n : ℕ} (D : Dat n)
@@ -153,6 +178,106 @@ private lemma exists_bwdExt {θ : ℝ} (hθ0 : 0 ≤ θ) (hθ : θ ≤ obsT)
       rw [hrr]; exact D.matVec_revMat t _ x
     simpa [Function.comp, this] using hcomp
   · funext x; simp [hr_def, hG0]
+
+/-! ### Elementary properties of the weight `NW` -/
+
+private lemma NW_true (ℓ θ : ℝ) (x₀ : Cube n) (t : ℝ) (x y : Cube n) :
+    D.NW ℓ θ x₀ t (x, y, true)
+      = Real.exp (D.F t y - (1 - D.dbar ℓ θ x₀) * D.F t x
+          - D.dbar ℓ θ x₀ * D.F θ x₀) := rfl
+
+private lemma NW_false (ℓ θ : ℝ) (x₀ : Cube n) (t : ℝ) (x y : Cube n) :
+    D.NW ℓ θ x₀ t (x, y, false)
+      = Real.exp (D.F t y - D.F t x + D.dbar ℓ θ x₀ * (ℓ + 1 - D.F θ x₀)) := rfl
+
+private lemma NW_pos (ℓ θ : ℝ) (x₀ : Cube n) (t : ℝ) (s : JSt n) :
+    0 < D.NW ℓ θ x₀ t s := by
+  rw [NW]; split <;> exact Real.exp_pos _
+
+/-- Passing from the alive to the dead sector multiplies the weight by
+`e^{δ̄(ℓ+1-F_t(x))}`. -/
+private lemma NW_false_eq (ℓ θ : ℝ) (x₀ : Cube n) (t : ℝ) (x y : Cube n) :
+    D.NW ℓ θ x₀ t (x, y, false)
+      = D.NW ℓ θ x₀ t (x, y, true)
+        * Real.exp (D.dbar ℓ θ x₀ * (ℓ + 1 - D.F t x)) := by
+  rw [D.NW_true, D.NW_false, ← Real.exp_add]; congr 1; ring
+
+private lemma F_flip_eq {t : ℝ} (i : Fin n) (x : Cube n) :
+    D.F t (flipCoord i x) = D.F t x + Real.log (D.Y t i x) := by
+  have := D.F_flipCoord_sub t i x; linarith
+
+/-- Synchronized flip, alive landing: the weight ratio is `X_i·Y_i^{δ̄-1}`. -/
+private lemma NW_flip_both (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T)
+    (i : Fin n) (x y : Cube n) :
+    D.NW ℓ θ x₀ t (flipCoord i x, flipCoord i y, true)
+      = D.NW ℓ θ x₀ t (x, y, true)
+        * (D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1)) := by
+  have hX : 0 < D.Y t i y := D.Y_pos ht i y
+  have hY : 0 < D.Y t i x := D.Y_pos ht i x
+  have hc : D.Y t i y * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1)
+      = Real.exp (Real.log (D.Y t i y)
+          + Real.log (D.Y t i x) * (D.dbar ℓ θ x₀ - 1)) := by
+    rw [Real.exp_add, Real.exp_log hX, Real.rpow_def_of_pos hY]
+  rw [D.NW_true, D.NW_true, hc, ← Real.exp_add]
+  congr 1
+  rw [D.F_flip_eq i x, D.F_flip_eq i y]; ring
+
+/-- `W`-only flip: the weight ratio is `X_i`. -/
+private lemma NW_flip_W (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T)
+    (i : Fin n) (x y : Cube n) :
+    D.NW ℓ θ x₀ t (x, flipCoord i y, true)
+      = D.NW ℓ θ x₀ t (x, y, true) * D.Y t i y := by
+  have hX : 0 < D.Y t i y := D.Y_pos ht i y
+  rw [D.NW_true, D.NW_true, ← Real.exp_log hX, ← Real.exp_add]
+  congr 1
+  rw [D.F_flip_eq i y]; ring
+
+/-- `V`-only flip, alive landing: the weight ratio is `Y_i^{δ̄-1}`. -/
+private lemma NW_flip_V (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T)
+    (i : Fin n) (x y : Cube n) :
+    D.NW ℓ θ x₀ t (flipCoord i x, y, true)
+      = D.NW ℓ θ x₀ t (x, y, true) * D.Y t i x ^ (D.dbar ℓ θ x₀ - 1) := by
+  have hY : 0 < D.Y t i x := D.Y_pos ht i x
+  rw [D.NW_true, D.NW_true, Real.rpow_def_of_pos hY, ← Real.exp_add]
+  congr 1
+  rw [D.F_flip_eq i x]; ring
+
+/-- Synchronized flip out of the dead sector: the weight ratio is `X_i/Y_i`. -/
+private lemma NW_flip_both_dead (ℓ θ : ℝ) (x₀ : Cube n) {t : ℝ} (ht : t ≤ D.T)
+    (i : Fin n) (x y : Cube n) :
+    D.NW ℓ θ x₀ t (flipCoord i x, flipCoord i y, false)
+      = D.NW ℓ θ x₀ t (x, y, false) * (D.Y t i y / D.Y t i x) := by
+  have hX : 0 < D.Y t i y := D.Y_pos ht i y
+  have hY : 0 < D.Y t i x := D.Y_pos ht i x
+  have hc : D.Y t i y / D.Y t i x
+      = Real.exp (Real.log (D.Y t i y) - Real.log (D.Y t i x)) := by
+    rw [Real.exp_sub, Real.exp_log hX, Real.exp_log hY]
+  rw [D.NW_false, D.NW_false, hc, ← Real.exp_add]
+  congr 1
+  rw [D.F_flip_eq i x, D.F_flip_eq i y]; ring
+
+/-! ### Expansion of the jump-rate pairing -/
+
+open Classical in
+private lemma jrate_apply (dd : ℝ) (B : Set (Cube n)) (t : ℝ)
+    (x y : Cube n) (b : Bool) (τ : JSt n) :
+    D.jrate dd B t (x, y, b) τ
+      = ∑ i : Fin n,
+        ((if τ.1 = flipCoord i x ∧ τ.2.1 = flipCoord i y ∧
+              (τ.2.2 = (b && decide (τ.1 ∉ B))) then
+            (if b then
+              (if D.Y t i x < 1 then D.Y t i x / 2
+               else D.Y t i x ^ (1 - dd) / 2)
+             else D.Y t i x / 2)
+          else 0)
+        + (if b ∧ τ.2.2 = true ∧ τ.1 = x ∧ τ.2.1 = flipCoord i y ∧ D.Y t i x < 1 then
+            (1 - D.Y t i x ^ dd) / 2
+          else 0)
+        + (if b ∧ τ.2.1 = y ∧ τ.1 = flipCoord i x ∧ ¬(D.Y t i x < 1) ∧
+              (τ.2.2 = decide (τ.1 ∉ B)) then
+            (D.Y t i x - D.Y t i x ^ (1 - dd)) / 2
+          else 0)) := by
+  obtain ⟨x', y', b'⟩ := τ; rfl
 
 /-- **Weighted terminal comparison** [LGF Prop 4.1, `N`-weighted form]:
 for every nonnegative terminal test `h` and every starting point,
