@@ -94,34 +94,100 @@ lemma tA_pos : 0 < D.tA := by
 lemma obsT_lt_T : obsT < D.T := by
   have := D.tA_pos; simp only [T]; linarith
 
+/-- `|e^{-s}| ≤ 1` for `s ≥ 0`: the smoothing parameter stays in the solid
+cube along the (forward) heat flow. -/
+lemma abs_exp_neg_le_one {s : ℝ} (hs : 0 ≤ s) : |Real.exp (-s)| ≤ 1 := by
+  rw [abs_of_pos (Real.exp_pos _)]
+  simpa using Real.exp_le_exp.mpr (neg_nonpos.mpr hs)
+
 lemma fs_pos {s : ℝ} (hs : 0 ≤ s) (x : Cube n) : 0 < D.fs s x := by
-  sorry
+  simp only [fs, heatAt]
+  exact smooth_pos (abs_exp_neg_le_one hs) D.hf x
+
+lemma fs_ne_zero {s : ℝ} (hs : 0 ≤ s) (x : Cube n) : D.fs s x ≠ 0 :=
+  (D.fs_pos hs x).ne'
 
 lemma fs_zero (x : Cube n) : D.fs 0 x = D.f x := by
-  sorry
+  simp only [fs, heatAt, neg_zero, Real.exp_zero, smooth_one]
 
 /-- Mass conservation along the heat flow. -/
 lemma unifE_fs (s : ℝ) : unifE (D.fs s) = 1 := by
-  sorry
+  simp only [fs, heatAt]
+  rw [unifE_smooth, D.hm]
+
+/-- `0 ≤ T - t` whenever `t ≤ T`; the heat time along the reverse process. -/
+lemma T_sub_nonneg {t : ℝ} (ht : t ≤ D.T) : (0 : ℝ) ≤ D.T - t := by linarith
 
 lemma Y_pos {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (x : Cube n) :
     0 < D.Y t i x := by
-  sorry
+  simp only [Y]
+  exact div_pos (D.fs_pos (D.T_sub_nonneg ht) _) (D.fs_pos (D.T_sub_nonneg ht) _)
+
+lemma Y_ne_zero {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (x : Cube n) :
+    D.Y t i x ≠ 0 := (D.Y_pos ht i x).ne'
+
+lemma kappa_pos : 0 < kappa D.a := lt_trans one_pos (one_lt_kappa D.ha0 D.ha1)
+
+/-- Before the observation time the smoothing parameter is at most the bias:
+`e^{-(T-t)} ≤ a` for `t ≤ T_o`. -/
+lemma abs_exp_le_a {t : ℝ} (ht : t ≤ obsT) :
+    |Real.exp (-(D.T - t))| ≤ D.a := by
+  rw [abs_of_pos (Real.exp_pos _)]
+  simp only [obsT] at ht
+  have hle : D.tA ≤ D.T - t := by simp only [T, obsT]; linarith
+  calc Real.exp (-(D.T - t)) ≤ Real.exp (-D.tA) := Real.exp_le_exp.mpr (by linarith)
+    _ = D.a := by rw [tA, neg_neg, Real.exp_log D.ha0]
+
+lemma le_T_of_le_obsT {t : ℝ} (ht : t ≤ obsT) : t ≤ D.T := le_trans ht D.obsT_lt_T.le
+
+/-- Involutivity of the edge ratio, in the form needed before `Y_flipCoord`. -/
+lemma Y_flipCoord_aux (t : ℝ) (i : Fin n) (x : Cube n) :
+    D.Y t i (flipCoord i x) = (D.Y t i x)⁻¹ := by
+  simp only [Y, flipCoord_flipCoord, inv_div]
 
 /-- **Edge-ratio bound** [C Lemma 5 / LGF eq (4.4)]: for `t ≤ T_o`,
 `κ_a⁻¹ ≤ Y_i(t,x) ≤ κ_a`. -/
 lemma Y_le_kappa {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x : Cube n) :
     D.Y t i x ≤ kappa D.a := by
-  sorry
+  have hpos := D.fs_pos (D.T_sub_nonneg (D.le_T_of_le_obsT ht)) x
+  simp only [Y]
+  rw [div_le_iff₀ hpos, kappa]
+  simp only [fs, heatAt]
+  exact smooth_flipCoord_le (D.abs_exp_le_a ht) D.ha1 (fun y => (D.hf y).le) i x
 
 lemma kappa_inv_le_Y {t : ℝ} (ht : t ≤ obsT) (i : Fin n) (x : Cube n) :
     (kappa D.a)⁻¹ ≤ D.Y t i x := by
-  sorry
+  have hY : 0 < D.Y t i x := D.Y_pos (D.le_T_of_le_obsT ht) i x
+  have h := D.Y_le_kappa ht i (flipCoord i x)
+  rw [D.Y_flipCoord_aux] at h
+  have h1 : 1 ≤ D.Y t i x * kappa D.a := by
+    have := mul_le_mul_of_nonneg_left h hY.le
+    rwa [mul_inv_cancel₀ hY.ne'] at this
+  rw [inv_eq_one_div, div_le_iff₀ D.kappa_pos]
+  exact h1
 
 @[simp] lemma Y_flipCoord (t : ℝ) (i : Fin n) (x : Cube n) :
-    D.Y t i (flipCoord i x) = (D.Y t i x)⁻¹ := by
-  sorry
+    D.Y t i (flipCoord i x) = (D.Y t i x)⁻¹ := D.Y_flipCoord_aux t i x
 
+/-- `F_t(σ_i x) - F_t(x) = log Y_i(t,x)`, for `t ≤ T` (where `f_{T-t} > 0`).
+This is `F_flipCoord_sub` with the (necessary) time restriction; see the
+STATEMENT-ISSUE note there. -/
+lemma F_flipCoord_sub_of_le {t : ℝ} (ht : t ≤ D.T) (i : Fin n) (x : Cube n) :
+    D.F t (flipCoord i x) - D.F t x = Real.log (D.Y t i x) := by
+  simp only [F, Y]
+  rw [Real.log_div (D.fs_ne_zero (D.T_sub_nonneg ht) _) (D.fs_ne_zero (D.T_sub_nonneg ht) _)]
+
+-- STATEMENT-ISSUE: as stated (for *every* `t : ℝ`) this lemma is false; it
+-- needs `t ≤ D.T`, which is exactly `F_flipCoord_sub_of_le` above (proved, and
+-- used everywhere in this development).  For `t > D.T` the heat parameter
+-- `ρ = e^{-(T-t)}` exceeds `1`, the multilinear extension `f_{T-t}` may vanish,
+-- and both sides degenerate differently because `Real.log 0 = 0`.
+-- Falsity witness: `n = 1`, `a` arbitrary, `f 1 = 1/2`, `f (-1) = 3/2`
+-- (so `f > 0` and `unifE f = 1`).  At `ρ = 2`, i.e. `t = D.T + log 2`, one has
+--   `f_{T-t} x = (1+2)/2·(1/2) + (1-2)/2·(3/2) = 0` at `x = (1)`, while
+--   `f_{T-t} (σ x) = (1-2)/2·(1/2) + (1+2)/2·(3/2) = 2`.
+-- Then LHS `= log 2 - log 0 = log 2 ≠ 0`, whereas
+-- `Y = 2 / 0 = 0` so RHS `= log 0 = 0`.
 /-- `F_t(σ_i x) - F_t(x) = log Y_i(t,x)`. -/
 lemma F_flipCoord_sub (t : ℝ) (i : Fin n) (x : Cube n) :
     D.F t (flipCoord i x) - D.F t x = Real.log (D.Y t i x) := by
