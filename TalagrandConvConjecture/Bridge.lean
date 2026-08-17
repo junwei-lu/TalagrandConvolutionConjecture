@@ -21,18 +21,18 @@ Contents ([LGF Lemma 4.4] and the identities of §5.2):
 
 namespace Talagrand
 
+/-- `γ_t = e^{-(T_o - t)}` [LGF §4.1]. -/
+noncomputable def gam (t : ℝ) : ℝ := Real.exp (-(obsT - t))
+
 namespace Dat
 
 variable {n : ℕ} (D : Dat n)
 
-/-- `γ_t = e^{-(T_o - t)}` [LGF §4.1]. -/
-noncomputable def gam (t : ℝ) : ℝ := Real.exp (-(obsT - t))
-
 /-- `a_t = γ_t(1-a²)/(1-a²γ_t²)` [LGF §4.1]. -/
-noncomputable def aB (t : ℝ) : ℝ := D.gam t * (1 - D.a ^ 2) / (1 - D.a ^ 2 * D.gam t ^ 2)
+noncomputable def aB (t : ℝ) : ℝ := gam t * (1 - D.a ^ 2) / (1 - D.a ^ 2 * gam t ^ 2)
 
 /-- `b_t = a(1-γ_t²)/(1-a²γ_t²)` [LGF §4.1]. -/
-noncomputable def bB (t : ℝ) : ℝ := D.a * (1 - D.gam t ^ 2) / (1 - D.a ^ 2 * D.gam t ^ 2)
+noncomputable def bB (t : ℝ) : ℝ := D.a * (1 - gam t ^ 2) / (1 - D.a ^ 2 * gam t ^ 2)
 
 /-- Bridge mean vector `m_t(x,y,ζ) ∈ [-1,1]^n`,
 `m_t^{[i]} = a_t y_i + b_t x_i y_i ζ_i` [LGF §4.1]. -/
@@ -46,9 +46,9 @@ noncomputable def qB (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) : ℝ :=
 
 section ranges
 
-lemma gam_pos (t : ℝ) : 0 < D.gam t := Real.exp_pos _
+lemma gam_pos (t : ℝ) : 0 < gam t := Real.exp_pos _
 
-lemma gam_le_one {t : ℝ} (ht : t ≤ obsT) : D.gam t ≤ 1 := by
+lemma gam_le_one {t : ℝ} (ht : t ≤ obsT) : gam t ≤ 1 := by
   sorry
 
 lemma aB_nonneg {t : ℝ} (ht : t ≤ obsT) : 0 ≤ D.aB t := by

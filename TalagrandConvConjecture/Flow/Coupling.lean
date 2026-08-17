@@ -38,6 +38,13 @@ variable {n : ℕ}
 /-- Sectored joint state space: `(V-position, W-position, alive?)`. -/
 abbrev JSt (n : ℕ) := Cube n × Cube n × Bool
 
+open Classical in
+/-- Initial vector: unit mass at `(x₀, x₀, alive)`. (The `Tr 0` step of the
+glued flow then kills it if `x₀` is already in the barrier at `θ`, matching
+`τ = θ` in [LGF eq (3.1)].) -/
+noncomputable def initVec (x₀ : Cube n) : JSt n → ℝ := fun s =>
+  if s = (x₀, x₀, true) then 1 else 0
+
 namespace Dat
 
 variable (D : Dat n)
@@ -116,11 +123,6 @@ noncomputable def cellGen (ℓ θ d : ℝ) (z : ℕ → ℝ) (k : ℕ) (t : ℝ)
     JSt n → JSt n → ℝ :=
   fwdOf (jrate D d (D.barrier ℓ ((z k + z (k + 1)) / 2)) t)
 
-/-- Initial vector: unit mass at `(x₀, x₀, alive)`. (The `Tr 0` step of the
-glued flow then kills it if `x₀` is already in the barrier at `θ`, matching
-`τ = θ` in [LGF eq (3.1)].) -/
-noncomputable def initVec (x₀ : Cube n) : JSt n → ℝ := fun s =>
-  if s = (x₀, x₀, true) then 1 else 0
 
 /-- `IsCouplingFlow D ℓ θ x₀ K z π`: `π` is a glued flow for the stopped
 power coupling started at `(x₀, x₀)` at time `θ`, on the admissible grid
@@ -129,7 +131,7 @@ structure IsCouplingFlow (ℓ θ : ℝ) (x₀ : Cube n) (K : ℕ) (z : ℕ → �
     (π : ℕ → ℝ → JSt n → ℝ) : Prop where
   grid : D.AdmissibleGrid ℓ θ K z
   glued : IsGluedFlow K z (D.cellGen ℓ θ (D.dbar ℓ θ x₀) z)
-    (fun k => D.killTr ℓ (z k)) (D.initVec x₀) π
+    (fun k => D.killTr ℓ (z k)) (initVec x₀) π
 
 /-- A bundled coupling flow for one starting point. -/
 structure CFlow (ℓ θ : ℝ) (x₀ : Cube n) where

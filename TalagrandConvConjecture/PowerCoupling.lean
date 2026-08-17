@@ -144,11 +144,11 @@ lemma dbar_eq_zero {ℓ θ : ℝ} {x₀ : Cube n} (h : x₀ ∉ D.activeSet ℓ 
     D.dbar ℓ θ x₀ = 0 := by
   sorry
 
+open Classical in
 /-- **Conditioned power bound** [LGF eq (4.11)]: for `t ≤ T_o`, on the active
 set, writing `d = δ̄`,
 `(δ_i·(1_{S_i>0} + r_{t,i}^ζ·1_{S_i≤0}))² ≤ κ_a·Λ_a²·δ̄²·λ_{t,i}^ζ(x)`,
-where `δ_i = d·powerRatio` and `r_{t,i}^ζ = λ_{t,i}^ζ/Y_i`. -/
-open Classical in
+where `δ_i = powerRatio δ̄ Y` and `r_{t,i}^ζ = λ_{t,i}^ζ/Y_i`. -/
 theorem conditioned_power_bound {ℓ θ t : ℝ} (ht : t ≤ obsT) {x₀ : Cube n}
     (i : Fin n) (x ζ : Cube n) :
     (powerRatio (D.dbar ℓ θ x₀) (D.Y t i x) *
