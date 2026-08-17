@@ -1,0 +1,4 @@
+srun: job 39763385 queued and waiting for resources
+srun: job 39763385 has been allocated resources
+You've hit your session limit · resets 2pm (America/New_York)
+srun: error: holy7c06408: task 0: Exited with exit code 1
