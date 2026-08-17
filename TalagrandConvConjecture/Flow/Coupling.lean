@@ -149,9 +149,17 @@ theorem exists_cflow (ℓ : ℝ) (hℓ : 0 < ℓ) {θ : ℝ} (hθ0 : 0 ≤ θ)
     (hθ : θ ≤ obsT) (x₀ : Cube n) : Nonempty (D.CFlow ℓ θ x₀) := by
   sorry
 
-/-- Terminal (time `T_o`) sub-law of a coupling flow. -/
-noncomputable def CFlow.term {ℓ θ : ℝ} {x₀ : Cube n} (c : D.CFlow ℓ θ x₀) :
-    JSt n → ℝ := c.π (c.K - 1) obsT
+end Dat
+
+/-- Terminal (time `T_o`) sub-law of a coupling flow (`D` implicit so that
+`c.term` dot-notation resolves). -/
+noncomputable def Dat.CFlow.term {n : ℕ} {D : Dat n} {ℓ θ : ℝ} {x₀ : Cube n}
+    (c : D.CFlow ℓ θ x₀) : JSt n → ℝ := c.π (c.K - 1) obsT
+
+namespace Dat
+
+variable (D : Dat n)
+
 
 /-! ## Transport properties of the coupling flow -/
 
