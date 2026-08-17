@@ -49,21 +49,52 @@ section ranges
 lemma gam_pos (t : ℝ) : 0 < gam t := Real.exp_pos _
 
 lemma gam_le_one {t : ℝ} (ht : t ≤ obsT) : gam t ≤ 1 := by
-  sorry
+  have : -(obsT - t) ≤ 0 := by linarith
+  simpa [gam] using Real.exp_le_one_iff.mpr this
+
+lemma a_sq_lt_one : D.a ^ 2 < 1 := by
+  nlinarith [mul_pos D.ha0 (sub_pos.mpr D.ha1), D.ha1]
+
+/-- The common denominator `1 - a²γ_t²` is strictly positive (for all `t` with
+`γ_t ≤ 1`). -/
+lemma den_pos {t : ℝ} (ht : t ≤ obsT) : 0 < 1 - D.a ^ 2 * gam t ^ 2 := by
+  have hg0 : 0 < gam t := gam_pos t
+  have hg1 : gam t ≤ 1 := gam_le_one ht
+  have hgs : gam t ^ 2 ≤ 1 := by nlinarith
+  nlinarith [D.a_sq_lt_one, sq_nonneg D.a]
 
 lemma aB_nonneg {t : ℝ} (ht : t ≤ obsT) : 0 ≤ D.aB t := by
-  sorry
+  have hg0 : 0 < gam t := gam_pos t
+  refine div_nonneg (mul_nonneg hg0.le ?_) (le_of_lt (D.den_pos ht))
+  linarith [D.a_sq_lt_one]
 
 lemma bB_nonneg {t : ℝ} (ht : t ≤ obsT) : 0 ≤ D.bB t := by
-  sorry
+  have hg0 : 0 < gam t := gam_pos t
+  have hg1 : gam t ≤ 1 := gam_le_one ht
+  refine div_nonneg (mul_nonneg D.ha0.le ?_) (le_of_lt (D.den_pos ht))
+  nlinarith
 
 /-- `a_t + b_t = (a+γ_t)/(1+aγ_t) ≤ 1`, hence `|m^{[i]}| ≤ 1`. -/
 lemma aB_add_bB_le_one {t : ℝ} (ht : t ≤ obsT) : D.aB t + D.bB t ≤ 1 := by
-  sorry
+  have hg0 : 0 < gam t := gam_pos t
+  have hg1 : gam t ≤ 1 := gam_le_one ht
+  have hd : 0 < 1 - D.a ^ 2 * gam t ^ 2 := D.den_pos ht
+  rw [aB, bB, ← add_div, div_le_one hd]
+  -- `1 - a²γ² - (γ(1-a²) + a(1-γ²)) = (1-a)(1-γ)(1-aγ) ≥ 0`
+  nlinarith [mul_nonneg (mul_nonneg (sub_nonneg.mpr D.ha1.le) (sub_nonneg.mpr hg1))
+    (sub_nonneg.mpr (by nlinarith [D.ha0, D.ha1] : D.a * gam t ≤ 1))]
 
 lemma abs_mB_le_one {t : ℝ} (ht : t ≤ obsT) (x y ζ : Cube n) (i : Fin n) :
     |D.mB t x y ζ i| ≤ 1 := by
-  sorry
+  have h1 : |D.aB t * toR (y i)| = D.aB t := by
+    rw [abs_mul, abs_toR, mul_one, abs_of_nonneg (D.aB_nonneg ht)]
+  have h2 : |D.bB t * toR (x i) * toR (y i) * toR (ζ i)| = D.bB t := by
+    rw [abs_mul, abs_mul, abs_mul, abs_toR, abs_toR, abs_toR,
+      abs_of_nonneg (D.bB_nonneg ht)]; ring
+  calc |D.mB t x y ζ i| ≤ |D.aB t * toR (y i)|
+        + |D.bB t * toR (x i) * toR (y i) * toR (ζ i)| := abs_add_le _ _
+    _ = D.aB t + D.bB t := by rw [h1, h2]
+    _ ≤ 1 := D.aB_add_bB_le_one ht
 
 end ranges
 
