@@ -182,6 +182,13 @@ lemma exp_neg_T_sub (t : ℝ) : Real.exp (-(D.T - t)) = D.a * gam t := by
     simp only [T, tA]; ring
   rw [h, Real.exp_add, Real.exp_log D.ha0, gam]
 
+/-- Normalized form of `λ_{t,i}^ζ` once the sign `ε = x_iζ_i` is known. -/
+lemma lam_eq_of (t : ℝ) (i : Fin n) (x ζ : Cube n) {p q : ℝ}
+    (hp : 1 - D.a * gam t * toR (x i) * toR (ζ i) = p)
+    (hq : 1 + D.a * gam t * toR (x i) * toR (ζ i) = q) :
+    D.lam t i x ζ = p / q := by
+  simp only [lam, D.exp_neg_T_sub, hp, hq]
+
 /-- Coefficient ODE on the nondegenerate range `1 - a²γ_t² ≠ 0`
 (automatic for `t ≤ T_o` by `den_pos`, and in fact for every `t ≠ T`):
 `d/dt m_t^{[i]} = λ_{t,i}^ζ(x)·a_t·y_i` [LGF §5.2]. -/
@@ -289,7 +296,66 @@ theorem hasDerivAt_qB_sq (φ : Cube n → ℝ) (t : ℝ) (ζ x y : Cube n) :
 theorem lam_mul_bB_sq_le {t : ℝ} (ht : t ≤ obsT) (x y ζ : Cube n) (i : Fin n) :
     D.lam t i x ζ * D.bB t ^ 2
       ≤ D.a ^ 2 / (1 - D.a ^ 2) * (1 - D.mB t x y ζ i ^ 2) := by
-  sorry
+  have hg0 : 0 < gam t := gam_pos t
+  have hg1 : gam t ≤ 1 := gam_le_one ht
+  have hd : 0 < 1 - D.a ^ 2 * gam t ^ 2 := D.den_pos ht
+  have hag : D.a * gam t < 1 := by nlinarith [D.ha0, D.ha1]
+  have hp1 : (0 : ℝ) < 1 - D.a * gam t := by linarith
+  have hp2 : (0 : ℝ) < 1 + D.a * gam t := by nlinarith [D.ha0]
+  have hasq : (0 : ℝ) < 1 - D.a ^ 2 := by linarith [D.a_sq_lt_one]
+  have hgsq : (0 : ℝ) ≤ 1 - gam t ^ 2 := by nlinarith
+  have hne1 : (1 : ℝ) - D.a * gam t ≠ 0 := ne_of_gt hp1
+  have hne2 : (1 : ℝ) + D.a * gam t ≠ 0 := ne_of_gt hp2
+  have hnd : (1 : ℝ) - D.a ^ 2 * gam t ^ 2 ≠ 0 := ne_of_gt hd
+  have hna : (1 : ℝ) - D.a ^ 2 ≠ 0 := ne_of_gt hasq
+  -- the difference `RHS - LHS` equals `a²γ²(1-a²)(1-γ²)/((1±aγ)²(1-a²γ²)) ≥ 0`
+  have hquot : ∀ d : ℝ, 0 ≤ d →
+      0 ≤ D.a ^ 2 * gam t ^ 2 * (1 - D.a ^ 2) * (1 - gam t ^ 2) / d := fun d hdd =>
+    div_nonneg (mul_nonneg (mul_nonneg (mul_nonneg (sq_nonneg _) (sq_nonneg _)) hasq.le) hgsq) hdd
+  have hden : ∀ c : ℝ, (0 : ℝ) ≤ c ^ 2 * (1 - D.a ^ 2 * gam t ^ 2) := fun c =>
+    mul_nonneg (sq_nonneg _) hd.le
+  have hm : D.mB t x y ζ i ^ 2
+      = (D.aB t + D.bB t * (toR (x i) * toR (ζ i))) ^ 2 := by
+    simp only [mB]
+    linear_combination ((D.aB t + D.bB t * (toR (x i) * toR (ζ i))) ^ 2) * toR_sq (y i)
+  rw [hm, ← sub_nonneg]
+  rcases toR_eq_one_or (x i) with hx | hx <;> rcases toR_eq_one_or (ζ i) with hz | hz
+  · rw [show toR (x i) * toR (ζ i) = 1 by rw [hx, hz]; ring,
+      D.lam_eq_of t i x ζ (p := 1 - D.a * gam t) (q := 1 + D.a * gam t)
+        (by rw [hx, hz]; ring) (by rw [hx, hz]; ring),
+      show D.a ^ 2 / (1 - D.a ^ 2) * (1 - (D.aB t + D.bB t * 1) ^ 2)
+          - (1 - D.a * gam t) / (1 + D.a * gam t) * D.bB t ^ 2
+        = D.a ^ 2 * gam t ^ 2 * (1 - D.a ^ 2) * (1 - gam t ^ 2)
+            / ((1 + D.a * gam t) ^ 2 * (1 - D.a ^ 2 * gam t ^ 2)) by
+        simp only [aB, bB]; field_simp; ring]
+    exact hquot _ (hden _)
+  · rw [show toR (x i) * toR (ζ i) = -1 by rw [hx, hz]; ring,
+      D.lam_eq_of t i x ζ (p := 1 + D.a * gam t) (q := 1 - D.a * gam t)
+        (by rw [hx, hz]; ring) (by rw [hx, hz]; ring),
+      show D.a ^ 2 / (1 - D.a ^ 2) * (1 - (D.aB t + D.bB t * -1) ^ 2)
+          - (1 + D.a * gam t) / (1 - D.a * gam t) * D.bB t ^ 2
+        = D.a ^ 2 * gam t ^ 2 * (1 - D.a ^ 2) * (1 - gam t ^ 2)
+            / ((1 - D.a * gam t) ^ 2 * (1 - D.a ^ 2 * gam t ^ 2)) by
+        simp only [aB, bB]; field_simp; ring]
+    exact hquot _ (hden _)
+  · rw [show toR (x i) * toR (ζ i) = -1 by rw [hx, hz]; ring,
+      D.lam_eq_of t i x ζ (p := 1 + D.a * gam t) (q := 1 - D.a * gam t)
+        (by rw [hx, hz]; ring) (by rw [hx, hz]; ring),
+      show D.a ^ 2 / (1 - D.a ^ 2) * (1 - (D.aB t + D.bB t * -1) ^ 2)
+          - (1 + D.a * gam t) / (1 - D.a * gam t) * D.bB t ^ 2
+        = D.a ^ 2 * gam t ^ 2 * (1 - D.a ^ 2) * (1 - gam t ^ 2)
+            / ((1 - D.a * gam t) ^ 2 * (1 - D.a ^ 2 * gam t ^ 2)) by
+        simp only [aB, bB]; field_simp; ring]
+    exact hquot _ (hden _)
+  · rw [show toR (x i) * toR (ζ i) = 1 by rw [hx, hz]; ring,
+      D.lam_eq_of t i x ζ (p := 1 - D.a * gam t) (q := 1 + D.a * gam t)
+        (by rw [hx, hz]; ring) (by rw [hx, hz]; ring),
+      show D.a ^ 2 / (1 - D.a ^ 2) * (1 - (D.aB t + D.bB t * 1) ^ 2)
+          - (1 - D.a * gam t) / (1 + D.a * gam t) * D.bB t ^ 2
+        = D.a ^ 2 * gam t ^ 2 * (1 - D.a ^ 2) * (1 - gam t ^ 2)
+            / ((1 + D.a * gam t) ^ 2 * (1 - D.a ^ 2 * gam t ^ 2)) by
+        simp only [aB, bB]; field_simp; ring]
+    exact hquot _ (hden _)
 
 end identities
 
