@@ -1727,6 +1727,172 @@ private lemma abs_sum_Dtest_le (B : Finset (Cube n)) {ℓ θ : ℝ}
           * Real.sqrt (∑ x₀ ∈ A, D.startW θ x₀ * D.gamE φ (Φ x₀))) := by
         rw [hCst]
 
+/-! ### Stage C: closing the `Γ`-energy [LGF eq (4.19)–(4.21)]
+
+The `b_t²`-part of `gamE` is bounded by `κ/4` (level-one + `b`-control);
+the `a_t²`-part is closed by chaining the flow against
+`Q_t(x,y) = ∑_ζ H_t^ζ(x)·q_t^ζ(x,y)²` (carré du champ). -/
+
+/-- The squared-bridge average `Q_t(x,y) = ∑_ζ H^ζ q_ζ²` [LGF eq (4.20)]. -/
+private noncomputable def Qtest (φ : Cube n → ℝ) (t : ℝ) (x y : Cube n) : ℝ :=
+  ∑ ζ, D.Hlik t ζ x * D.qB φ t ζ x y ^ 2
+
+/-- The `a_t²`-part of the bridge energy density. -/
+private noncomputable def apInt (φ : Cube n → ℝ) (t : ℝ) (x y : Cube n) : ℝ :=
+  ∑ ζ, D.Hlik t ζ x * ∑ i, D.lam t i x ζ * D.aB t ^ 2
+    * dmext φ i (D.mB t x y ζ) ^ 2
+
+/-- The `b_t²`-part of the bridge energy density. -/
+private noncomputable def bpInt (φ : Cube n → ℝ) (t : ℝ) (x y : Cube n) : ℝ :=
+  ∑ ζ, D.Hlik t ζ x * ∑ i, D.lam t i x ζ * D.bB t ^ 2
+    * dmext φ i (D.mB t x y ζ) ^ 2
+
+private lemma Gam_eq_ap_add_bp (φ : Cube n → ℝ) (t : ℝ) (x y : Cube n) :
+    D.Gam φ t x y = D.apInt φ t x y + D.bpInt φ t x y := by
+  simp only [Gam, apInt, bpInt, ← Finset.sum_add_distrib, ← Finset.mul_sum]
+  refine Finset.sum_congr rfl fun ζ _ => ?_
+  congr 1
+  rw [← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  ring
+
+/-- `q_t^ζ(x,y) ∈ [0,1]` for a `{0,1}`-valued test. -/
+private lemma qB_mem01 {φ : Cube n → ℝ} (hφ : ∀ w, φ w = 0 ∨ φ w = 1)
+    {t : ℝ} (ht : t ≤ obsT) (ζ x y : Cube n) :
+    D.qB φ t ζ x y ∈ Set.Icc (0 : ℝ) 1 := by
+  have hz : ∀ i, |D.mB t x y ζ i| ≤ 1 := fun i => D.abs_mB_le_one ht x y ζ i
+  have hφ01 : ∀ w, φ w ∈ Set.Icc (0 : ℝ) 1 := by
+    intro w
+    rcases hφ w with h | h <;> rw [h] <;> constructor <;> norm_num
+  exact mext_mem_Icc hz hφ01
+
+/-- `Q_t(x,y) ∈ [0,1]` for a `{0,1}`-valued test and `t ≤ T_o`. -/
+private lemma Qtest_mem01 {φ : Cube n → ℝ} (hφ : ∀ w, φ w = 0 ∨ φ w = 1)
+    {t : ℝ} (ht : t ≤ obsT) (x y : Cube n) :
+    D.Qtest φ t x y ∈ Set.Icc (0 : ℝ) 1 := by
+  have hT : t ≤ D.T := le_trans ht D.obsT_lt_T.le
+  constructor
+  · refine Finset.sum_nonneg fun ζ _ => ?_
+    exact mul_nonneg (D.Hlik_nonneg hT ζ x) (sq_nonneg _)
+  · calc D.Qtest φ t x y
+        ≤ ∑ ζ, D.Hlik t ζ x * 1 := by
+          refine Finset.sum_le_sum fun ζ _ => ?_
+          refine mul_le_mul_of_nonneg_left ?_ (D.Hlik_nonneg hT ζ x)
+          have h := D.qB_mem01 hφ ht ζ x y
+          nlinarith [h.1, h.2]
+      _ = 1 := by
+          simp only [mul_one]
+          exact D.sum_Hlik hT x
+
+/-- Space-time derivative of `Q`: synchronized transport plus twice the
+`a_t²`-energy (carré du champ, [LGF eq (4.20)]). -/
+private lemma hasDerivAt_Qtest (φ : Cube n → ℝ) {t : ℝ} (ht : t < D.T)
+    (x y : Cube n) :
+    HasDerivAt (fun t => D.Qtest φ t x y)
+      (-(∑ i, D.Y t i x *
+          (D.Qtest φ t (flipCoord i x) (flipCoord i y) - D.Qtest φ t x y) / 2)
+        + 2 * D.apInt φ t x y) t := by
+  have hlam : ∀ (ζ : Cube n) (i : Fin n),
+      D.Hlik t ζ x * D.lam t i x ζ = D.Hlik t ζ (flipCoord i x) * D.Y t i x := by
+    intro ζ i
+    have h0 : D.Hlik t ζ x ≠ 0 := (D.Hlik_pos ht ζ x).ne'
+    rw [← D.Hlik_flipCoord_mul_Y ht i ζ x]
+    field_simp
+  have key : ∀ ζ : Cube n,
+      HasDerivAt (fun t => D.Hlik t ζ x * D.qB φ t ζ x y ^ 2)
+        (-(∑ i, D.Y t i x *
+            (D.Hlik t ζ (flipCoord i x)
+                * D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+              - D.Hlik t ζ x * D.qB φ t ζ x y ^ 2) / 2)
+          + D.Hlik t ζ x * (2 * D.aB t ^ 2 * ∑ i, D.lam t i x ζ
+              * dmext φ i (D.mB t x y ζ) ^ 2)) t := by
+    intro ζ
+    have hH := D.hasDerivAt_Hlik ht ζ x
+    have hq := D.hasDerivAt_qB_sq φ (ne_of_lt ht) ζ x y
+    have hprod := hH.mul hq
+    have hEq :
+        -(D.revGen t (fun w => D.Hlik t ζ w) x) * D.qB φ t ζ x y ^ 2
+          + D.Hlik t ζ x *
+            (-(∑ i, D.lam t i x ζ *
+                (D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+                  - D.qB φ t ζ x y ^ 2) / 2)
+              + 2 * D.aB t ^ 2 * ∑ i, D.lam t i x ζ
+                  * dmext φ i (D.mB t x y ζ) ^ 2)
+        = -(∑ i, D.Y t i x *
+            (D.Hlik t ζ (flipCoord i x)
+                * D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+              - D.Hlik t ζ x * D.qB φ t ζ x y ^ 2) / 2)
+          + D.Hlik t ζ x * (2 * D.aB t ^ 2 * ∑ i, D.lam t i x ζ
+              * dmext φ i (D.mB t x y ζ) ^ 2) := by
+      have hstep : ∀ i : Fin n,
+          D.Y t i x * (D.Hlik t ζ (flipCoord i x) - D.Hlik t ζ x) / 2
+              * D.qB φ t ζ x y ^ 2
+            + D.Hlik t ζ x *
+              (D.lam t i x ζ *
+                (D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+                  - D.qB φ t ζ x y ^ 2) / 2)
+          = D.Y t i x *
+              (D.Hlik t ζ (flipCoord i x)
+                  * D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+                - D.Hlik t ζ x * D.qB φ t ζ x y ^ 2) / 2 := by
+        intro i
+        linear_combination
+          ((D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+            - D.qB φ t ζ x y ^ 2) / 2) * hlam ζ i
+      have hre : ∀ S P R : ℝ,
+          -S * D.qB φ t ζ x y ^ 2 + D.Hlik t ζ x * (-P + R)
+            = -(S * D.qB φ t ζ x y ^ 2 + D.Hlik t ζ x * P)
+              + D.Hlik t ζ x * R := by
+        intro S P R; ring
+      rw [revGen, hre, Finset.sum_mul, Finset.mul_sum, ← Finset.sum_add_distrib]
+      congr 1
+      exact congrArg Neg.neg (Finset.sum_congr rfl fun i _ => hstep i)
+    rw [← hEq]
+    exact hprod
+  have hswap : ∀ i : Fin n,
+      D.Y t i x * (D.Qtest φ t (flipCoord i x) (flipCoord i y)
+          - D.Qtest φ t x y) / 2
+        = ∑ ζ : Cube n, D.Y t i x *
+            (D.Hlik t ζ (flipCoord i x)
+                * D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+              - D.Hlik t ζ x * D.qB φ t ζ x y ^ 2) / 2 := by
+    intro i
+    rw [Qtest, Qtest, ← Finset.sum_sub_distrib, Finset.mul_sum, Finset.sum_div]
+  have hap : D.apInt φ t x y
+      = ∑ ζ : Cube n, D.Hlik t ζ x * (D.aB t ^ 2 * ∑ i, D.lam t i x ζ
+          * dmext φ i (D.mB t x y ζ) ^ 2) := by
+    simp only [apInt]
+    refine Finset.sum_congr rfl fun ζ _ => ?_
+    rw [Finset.mul_sum]
+    congr 1
+    exact Finset.sum_congr rfl fun i _ => by ring
+  have hfin :
+      (∑ ζ : Cube n, (-(∑ i, D.Y t i x *
+          (D.Hlik t ζ (flipCoord i x)
+              * D.qB φ t ζ (flipCoord i x) (flipCoord i y) ^ 2
+            - D.Hlik t ζ x * D.qB φ t ζ x y ^ 2) / 2)
+        + D.Hlik t ζ x * (2 * D.aB t ^ 2 * ∑ i, D.lam t i x ζ
+            * dmext φ i (D.mB t x y ζ) ^ 2)))
+      = -(∑ i, D.Y t i x *
+          (D.Qtest φ t (flipCoord i x) (flipCoord i y) - D.Qtest φ t x y) / 2)
+        + 2 * D.apInt φ t x y := by
+    rw [Finset.sum_add_distrib]
+    congr 1
+    · have hneg : ∀ g : Cube n → ℝ, ∑ ζ : Cube n, -(g ζ) = -∑ ζ : Cube n, g ζ := by
+        intro g; simp
+      rw [hneg]
+      refine congrArg Neg.neg ?_
+      rw [Finset.sum_congr rfl fun i _ => hswap i, Finset.sum_comm]
+    · rw [hap, Finset.mul_sum]
+      refine Finset.sum_congr rfl fun ζ _ => ?_
+      ring
+  have hfun : (fun s => D.Qtest φ s x y)
+      = ∑ ζ : Cube n, (fun s => D.Hlik s ζ x * D.qB φ s ζ x y ^ 2) := by
+    funext s
+    simp only [Finset.sum_apply, Qtest]
+  rw [← hfin, hfun]
+  exact HasDerivAt.sum (u := (Finset.univ : Finset (Cube n))) fun ζ _ => key ζ
+
 /-- **Localized total variation bound** [LGF Lemma 3.3]: there is a universal
 `C` such that for all data, `θ ∈ [T_o-1, T_o]`, `ℓ > 0`, flow families, and
 `A ⊆ ℰ_θ`,
