@@ -8,7 +8,7 @@ only on Lean's three standard axioms (`propext`, `Classical.choice`,
 
 ## Talagrand's Convolution Conjecture
 
-Let $\lambda$ be the uniform measure on the hypercube $\{-1,1\}^n$ and, for a
+Let $\lambda$ be the uniform measure on the hypercube $ \{ -1,1 \}^n$ and, for a
 bias $0 < a < 1$, let $T_{\mu_a} f = f * \mu_a$ denote convolution with the
 $a$-biased product measure $\mu_a$. Talagrand (1989) conjectured that
 convolution smooths tails strictly beyond Markov's inequality, by a factor
@@ -16,7 +16,7 @@ $1/\sqrt{\log u}$. The theorem proved here: there is a universal constant
 $C$ such that for every $n \ge 0$, every $0 < a < 1$, every density
 $f \ge 0$ with $\mathbb{E}_\lambda f = 1$, and every $u > 1$,
 
-$$u \cdot \lambda\bigl(\{\, T_{\mu_a} f \ge u \,\}\bigr) \;\le\; \frac{C\, K_a}{\sqrt{\log u}}, \qquad K_a = \kappa_a^2 \sqrt{\frac{\log \kappa_a}{\kappa_a - 1}}, \quad \kappa_a = \frac{1+a}{1-a}.$$
+$$u \cdot \lambda(\{\, T_{\mu_a} f \ge u ) \le \frac{C\, K_a}{\sqrt{\log u}}, K_a = \kappa_a^2 \sqrt{\frac{\log \kappa_a}{\kappa_a - 1}}, \kappa_a = \frac{1+a}{1-a}.$$
 
 The formalization follows the proof of
 
