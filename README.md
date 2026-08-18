@@ -8,7 +8,7 @@ only on Lean's three standard axioms (`propext`, `Classical.choice`,
 
 ## Talagrand's Convolution Conjecture
 
-Let $\lambda$ be the uniform measure on the hypercube $ \{ -1,1 \}^n$ and, for a
+Let $\lambda$ be the uniform measure on the hypercube $\{ -1,1 \}^n$ and, for a
 bias $0 < a < 1$, let $T_{\mu_a} f = f * \mu_a$ denote convolution with the
 $a$-biased product measure $\mu_a$. Talagrand (1989) conjectured that
 convolution smooths tails strictly beyond Markov's inequality, by a factor
