@@ -16,7 +16,7 @@ $1/\sqrt{\log u}$. The theorem proved here: there is a universal constant
 $C$ such that for every $n \ge 0$, every $0 < a < 1$, every density
 $f \ge 0$ with $\mathbb{E}_\lambda f = 1$, and every $u > 1$,
 
-$$u \cdot \lambda(\{\, T_{\mu_a} f \ge u ) \le \frac{C\, K_a}{\sqrt{\log u}}, K_a = \kappa_a^2 \sqrt{\frac{\log \kappa_a}{\kappa_a - 1}}, \kappa_a = \frac{1+a}{1-a}.$$
+$$u \cdot \lambda( \{ T_{\mu_a} f \ge u \} ) \le \frac{C\, K_a}{\sqrt{\log u}}, K_a = \kappa_a^2 \sqrt{\frac{\log \kappa_a}{\kappa_a - 1}}, \kappa_a = \frac{1+a}{1-a}.$$
 
 The formalization follows the proof of
 
