@@ -1,7 +1,6 @@
 # Talagrand's Convolution Conjecture — a Lean 4 formalization
 
-A complete, machine-checked proof of the paper **Weak-Type Bounds for Convolution on the Boolean Hypercube
-** by Junwei Lu, Shengtao Guo, Ethan X. Fang, [https://arxiv.org/abs/2608.15515](https://arxiv.org/abs/2608.15515), formalized in Lean 4 over
+A complete, machine-checked proof of the paper "Weak-Type Bounds for Convolution on the Boolean Hypercube" by Junwei Lu, Shengtao Guo, Ethan X. Fang, [https://arxiv.org/abs/2608.15515](https://arxiv.org/abs/2608.15515), formalized in Lean 4 over
 [Mathlib](https://github.com/leanprover-community/mathlib4). This proves the [Talagrand's convolution conjecture](https://michel.talagrand.net/Korea13.pdf).
 The library compiles with **zero `sorry`** and the headline theorem depends
 only on Lean's three standard axioms (`propext`, `Classical.choice`,
